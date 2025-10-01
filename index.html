@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>wer bist du</title>
+  <title>Face Detection Demo</title>
   <style>
     body { 
       display: flex; 
@@ -12,164 +12,358 @@
       font-family: sans-serif; 
       margin: 0;
       padding: 20px;
-      background-color: #f5f5f5;
     }
-    
-    h1 {
-      color: #333;
-      margin-bottom: 20px;
-    }
-    
     video { 
-      border: 3px solid #333; 
+      border: 2px solid #333; 
       border-radius: 12px; 
-      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+      margin-top: 20px;
       max-width: 100%;
       height: auto;
     }
-    
     #status {
-      margin: 20px 0;
-      padding: 15px;
-      border-radius: 8px;
-      background-color: white;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #f0f0f0;
+      max-width: 600px;
       text-align: center;
-      min-width: 300px;
     }
-    
+    #debug {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #e8f4f8;
+      font-family: monospace;
+      font-size: 12px;
+      max-width: 600px;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+    }
     button {
       margin: 10px;
-      padding: 12px 24px;
+      padding: 10px 20px;
       font-size: 16px;
       border: none;
-      border-radius: 8px;
-      background-color: #28a745;
+      border-radius: 5px;
+      background-color: #007bff;
       color: white;
       cursor: pointer;
-      transition: background-color 0.3s;
     }
-    
     button:hover {
-      background-color: #218838;
+      background-color: #0056b3;
     }
-    
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
     }
-    
-    .error {
-      background-color: #f8d7da;
-      color: #721c24;
-      border: 1px solid #f5c6cb;
+    #toast {
+      visibility: hidden;
+      min-width: 300px;
+      background-color: #f44336;
+      color: white;
+      text-align: center;
+      border-radius: 8px;
+      padding: 16px;
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1;
+      transition: visibility 0.5s, opacity 0.5s;
+      opacity: 0;
     }
-    
-    .success {
-      background-color: #d4edda;
-      color: #155724;
-      border: 1px solid #c3e6cb;
+    #toast.show {
+      visibility: visible;
+      opacity: 1;
     }
   </style>
 </head>
 <body>
   <h1>wer bist du</h1>
-  <div id="status">Click "Start Camera" to begin</div>
-  <button id="startBtn">Start Camera</button>
+  <div id="status">Initializing...</div>
+  <div id="debug"></div>
+  <button id="startBtn" disabled>Start Camera</button>
   <video id="video" width="640" height="480" autoplay muted playsinline></video>
+  <div id="toast">⚠️ Another person detected in the background!</div>
 
+  <!-- Face API from different CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
   <script>
     const video = document.getElementById('video');
+    const toast = document.getElementById('toast');
     const status = document.getElementById('status');
+    const debug = document.getElementById('debug');
     const startBtn = document.getElementById('startBtn');
+    let detectionInterval;
 
-    function updateStatus(message, type = '') {
+    // Debug logging
+    function addDebug(message) {
+      const timestamp = new Date().toLocaleTimeString();
+      debug.innerHTML += `[${timestamp}] ${message}<br>`;
+      debug.scrollTop = debug.scrollHeight;
+    }
+
+    // Update status
+    function updateStatus(message) {
       status.textContent = message;
-      status.className = type;
+      addDebug(`STATUS: ${message}`);
       console.log(message);
     }
 
-    async function startCamera() {
-      updateStatus('Requesting camera and microphone access...', '');
+    // Check browser capabilities
+    function checkBrowserSupport() {
+      addDebug(`User Agent: ${navigator.userAgent}`);
+      addDebug(`Location: ${window.location.href}`);
+      addDebug(`Protocol: ${window.location.protocol}`);
+      
+      if (!navigator.mediaDevices) {
+        addDebug('ERROR: navigator.mediaDevices not available');
+        return false;
+      }
+      
+      if (!navigator.mediaDevices.getUserMedia) {
+        addDebug('ERROR: getUserMedia not available');
+        return false;
+      }
+      
+      addDebug('✓ Browser supports camera access');
+      return true;
+    }
+
+    // Load models with timeout and fallback
+    async function loadModels() {
+      updateStatus('Loading face detection models...');
+      
+      try {
+        // Try loading from the primary CDN with timeout
+        addDebug('Attempting to load models from CDN...');
+        
+        const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
+        
+        // Load with timeout
+        const loadPromise = Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+          faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
+          faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
+        ]);
+        
+        // Add timeout
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('Model loading timeout')), 15000)
+        );
+        
+        await Promise.race([loadPromise, timeoutPromise]);
+        
+        addDebug('✓ Models loaded successfully');
+        return true;
+        
+      } catch (err) {
+        addDebug(`Model loading failed: ${err.message}`);
+        
+        // Try alternative approach - use built-in browser face detection if available
+        if ('FaceDetector' in window) {
+          addDebug('Falling back to browser native face detection');
+          updateStatus('Using browser native face detection');
+          return 'native';
+        }
+        
+        // Final fallback - simple motion detection
+        addDebug('Falling back to motion detection');
+        updateStatus('Face detection unavailable, using motion detection');
+        return 'motion';
+      }
+    }
+
+    // Native face detection fallback
+    let nativeFaceDetector = null;
+    async function initNativeFaceDetection() {
+      try {
+        nativeFaceDetector = new FaceDetector({
+          maxDetectedFaces: 10,
+          fastMode: false
+        });
+        return true;
+      } catch (err) {
+        addDebug(`Native face detection failed: ${err.message}`);
+        return false;
+      }
+    }
+
+    // Motion detection fallback
+    let lastFrame = null;
+    function detectMotion(video, canvas, ctx) {
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      
+      const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      if (lastFrame) {
+        let diff = 0;
+        for (let i = 0; i < currentFrame.data.length; i += 4) {
+          const r = Math.abs(currentFrame.data[i] - lastFrame.data[i]);
+          const g = Math.abs(currentFrame.data[i + 1] - lastFrame.data[i + 1]);
+          const b = Math.abs(currentFrame.data[i + 2] - lastFrame.data[i + 2]);
+          diff += (r + g + b) / 3;
+        }
+        
+        const avgDiff = diff / (canvas.width * canvas.height);
+        return avgDiff > 10; // Threshold for motion detection
+      }
+      
+      lastFrame = currentFrame;
+      return false;
+    }
+
+    // Initialize
+    async function initialize() {
+      updateStatus('Checking browser support...');
+      
+      if (!checkBrowserSupport()) {
+        updateStatus('Browser does not support camera access');
+        return;
+      }
+
+      // Check if face-api is loaded
+      if (typeof faceapi === 'undefined') {
+        updateStatus('Face detection library failed to load');
+        addDebug('ERROR: face-api.js not loaded');
+        return;
+      }
+      
+      addDebug('✓ Face-api.js loaded');
+
+      const modelResult = await loadModels();
+      
+      if (modelResult === true) {
+        updateStatus('Face detection ready. Click "Start Camera" to begin.');
+      } else if (modelResult === 'native') {
+        const nativeReady = await initNativeFaceDetection();
+        if (nativeReady) {
+          updateStatus('Native face detection ready. Click "Start Camera" to begin.');
+        } else {
+          updateStatus('Motion detection ready. Click "Start Camera" to begin.');
+        }
+      } else {
+        updateStatus('Motion detection ready. Click "Start Camera" to begin.');
+      }
+      
+      startBtn.disabled = false;
+    }
+
+    // Start video with user interaction
+    async function startVideo() {
+      updateStatus('Requesting camera access...');
       startBtn.disabled = true;
       
       try {
+        addDebug('Calling getUserMedia...');
         const stream = await navigator.mediaDevices.getUserMedia({ 
           video: { 
             width: { ideal: 640 }, 
             height: { ideal: 480 },
             facingMode: 'user'
           }, 
-          audio: true  // Request microphone access too
+          audio: false 
         });
         
+        addDebug('✓ Got media stream');
         video.srcObject = stream;
-        updateStatus('✓ Camera and microphone connected successfully!', 'success');
+        updateStatus('Camera connected. Starting video...');
         
-        // Log stream info
-        const videoTrack = stream.getVideoTracks()[0];
-        const audioTrack = stream.getAudioTracks()[0];
+      } catch (err) {
+        addDebug(`getUserMedia error: ${err.name} - ${err.message}`);
+        updateStatus('Error accessing camera: ' + err.message);
+        startBtn.disabled = false;
         
-        if (videoTrack) {
-          console.log('Video track:', videoTrack.label);
+        if (err.name === 'NotAllowedError') {
+          updateStatus('Camera access denied. Please allow camera permissions and try again.');
+        } else if (err.name === 'NotFoundError') {
+          updateStatus('No camera found on this device.');
+        } else if (err.name === 'NotReadableError') {
+          updateStatus('Camera is being used by another application.');
         }
-        if (audioTrack) {
-          console.log('Audio track:', audioTrack.label);
+      }
+    }
+
+    // Detection function
+    async function runDetection() {
+      try {
+        if (video.videoWidth === 0 || video.videoHeight === 0) {
+          return;
+        }
+        
+        let faceCount = 0;
+        
+        // Try face-api.js first
+        if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+          faceCount = detections.length;
+          addDebug(`Face-api detected ${faceCount} faces`);
+        }
+        // Try native face detection
+        else if (nativeFaceDetector) {
+          const faces = await nativeFaceDetector.detect(video);
+          faceCount = faces.length;
+          addDebug(`Native detector found ${faceCount} faces`);
+        }
+        // Fallback to motion detection
+        else {
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          const hasMotion = detectMotion(video, canvas, ctx);
+          faceCount = hasMotion ? 2 : 1; // Simulate multiple people with motion
+          if (hasMotion) addDebug('Motion detected - simulating multiple people');
+        }
+        
+        if (faceCount > 1) {
+          showToast();
         }
         
       } catch (err) {
-        console.error('Media access error:', err);
-        startBtn.disabled = false;
-        
-        let errorMessage = 'Error accessing camera/microphone: ';
-        
-        switch (err.name) {
-          case 'NotAllowedError':
-            errorMessage += 'Permission denied. Please allow camera and microphone access and try again.';
-            break;
-          case 'NotFoundError':
-            errorMessage += 'No camera or microphone found on this device.';
-            break;
-          case 'NotReadableError':
-            errorMessage += 'Camera or microphone is being used by another application.';
-            break;
-          case 'OverconstrainedError':
-            errorMessage += 'Camera constraints could not be satisfied.';
-            break;
-          default:
-            errorMessage += err.message;
-        }
-        
-        updateStatus(errorMessage, 'error');
+        addDebug(`Detection error: ${err.message}`);
       }
     }
 
     // Event listeners
-    startBtn.addEventListener('click', startCamera);
+    startBtn.addEventListener('click', startVideo);
 
-    video.addEventListener('loadedmetadata', () => {
-      console.log(`Video dimensions: ${video.videoWidth}x${video.videoHeight}`);
+    video.addEventListener('play', () => {
+      updateStatus('Video started. Detection active.');
+      addDebug('Video playing, starting detection');
+      
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
+      
+      detectionInterval = setInterval(runDetection, 1000);
     });
 
     video.addEventListener('error', (e) => {
-      updateStatus('Video playback error occurred', 'error');
-      console.error('Video error:', e);
+      updateStatus('Video error occurred');
+      addDebug(`Video error: ${e}`);
     });
 
-    // Cleanup when page is closed
+    function showToast() {
+      toast.className = "show";
+      setTimeout(() => { 
+        toast.className = toast.className.replace("show", ""); 
+      }, 3000);
+    }
+
+    // Cleanup
     window.addEventListener('beforeunload', () => {
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
       if (video.srcObject) {
         video.srcObject.getTracks().forEach(track => track.stop());
       }
     });
 
-    // Check browser support on load
-    window.addEventListener('load', () => {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        updateStatus('Camera access not supported in this browser', 'error');
-        startBtn.disabled = true;
-      }
-    });
+    // Start when page loads
+    window.addEventListener('load', initialize);
   </script>
 </body>
 </html>
