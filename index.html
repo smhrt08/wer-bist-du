@@ -57,10 +57,9 @@
       background-color: #ccc;
       cursor: not-allowed;
     }
-    #toast {
+    .toast {
       visibility: hidden;
       min-width: 300px;
-      background-color: #f44336;
       color: white;
       text-align: center;
       border-radius: 8px;
@@ -73,9 +72,15 @@
       transition: visibility 0.5s, opacity 0.5s;
       opacity: 0;
     }
-    #toast.show {
+    .toast.show {
       visibility: visible;
       opacity: 1;
+    }
+    #faceToast {
+      background-color: #f44336;
+    }
+    #lowLightToast {
+      background-color: #ffa500;
     }
   </style>
 </head>
@@ -85,284 +90,205 @@
   <div id="debug"></div>
   <button id="startBtn" disabled>Start Camera</button>
   <video id="video" width="640" height="480" autoplay muted playsinline></video>
-  <div id="toast">⚠️ Another person detected in the background!</div>
+  <div id="faceToast" class="toast">⚠️ Another person detected in the background!</div>
+  <div id="lowLightToast" class="toast">⚠️ Low lighting detected!</div>
 
-  <!-- Face API from different CDN -->
+  <!-- Face API CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
+
   <script>
     const video = document.getElementById('video');
-    const toast = document.getElementById('toast');
+    const startBtn = document.getElementById('startBtn');
     const status = document.getElementById('status');
     const debug = document.getElementById('debug');
-    const startBtn = document.getElementById('startBtn');
+    const faceToast = document.getElementById('faceToast');
+    const lowLightToast = document.getElementById('lowLightToast');
     let detectionInterval;
+    let nativeFaceDetector = null;
+    let lastFrame = null;
 
     // Debug logging
-    function addDebug(message) {
+    function addDebug(msg) {
       const timestamp = new Date().toLocaleTimeString();
-      debug.innerHTML += `[${timestamp}] ${message}<br>`;
+      debug.innerHTML += `[${timestamp}] ${msg}<br>`;
       debug.scrollTop = debug.scrollHeight;
+      console.log(msg);
     }
 
     // Update status
-    function updateStatus(message) {
-      status.textContent = message;
-      addDebug(`STATUS: ${message}`);
-      console.log(message);
+    function updateStatus(msg) {
+      status.textContent = msg;
+      addDebug(`STATUS: ${msg}`);
     }
 
-    // Check browser capabilities
+    // Check browser support
     function checkBrowserSupport() {
-      addDebug(`User Agent: ${navigator.userAgent}`);
-      addDebug(`Location: ${window.location.href}`);
-      addDebug(`Protocol: ${window.location.protocol}`);
-      
-      if (!navigator.mediaDevices) {
-        addDebug('ERROR: navigator.mediaDevices not available');
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        addDebug('ERROR: Camera API not supported');
         return false;
       }
-      
-      if (!navigator.mediaDevices.getUserMedia) {
-        addDebug('ERROR: getUserMedia not available');
-        return false;
-      }
-      
-      addDebug('✓ Browser supports camera access');
+      addDebug('✓ Camera API supported');
       return true;
     }
 
-    // Load models with timeout and fallback
+    // Load face-api models
     async function loadModels() {
       updateStatus('Loading face detection models...');
-      
       try {
-        // Try loading from the primary CDN with timeout
-        addDebug('Attempting to load models from CDN...');
-        
         const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
-        
-        // Load with timeout
         const loadPromise = Promise.all([
           faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
           faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
           faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
         ]);
-        
-        // Add timeout
-        const timeoutPromise = new Promise((_, reject) => 
-          setTimeout(() => reject(new Error('Model loading timeout')), 15000)
-        );
-        
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Model loading timeout')), 15000));
         await Promise.race([loadPromise, timeoutPromise]);
-        
-        addDebug('✓ Models loaded successfully');
+        addDebug('✓ Models loaded');
         return true;
-        
       } catch (err) {
-        addDebug(`Model loading failed: ${err.message}`);
-        
-        // Try alternative approach - use built-in browser face detection if available
+        addDebug(`Model load failed: ${err.message}`);
         if ('FaceDetector' in window) {
-          addDebug('Falling back to browser native face detection');
-          updateStatus('Using browser native face detection');
+          addDebug('Using native FaceDetector fallback');
           return 'native';
         }
-        
-        // Final fallback - simple motion detection
-        addDebug('Falling back to motion detection');
-        updateStatus('Face detection unavailable, using motion detection');
+        addDebug('Using motion detection fallback');
         return 'motion';
       }
     }
 
-    // Native face detection fallback
-    let nativeFaceDetector = null;
     async function initNativeFaceDetection() {
       try {
-        nativeFaceDetector = new FaceDetector({
-          maxDetectedFaces: 10,
-          fastMode: false
-        });
+        nativeFaceDetector = new FaceDetector({ maxDetectedFaces: 10, fastMode: false });
         return true;
       } catch (err) {
-        addDebug(`Native face detection failed: ${err.message}`);
+        addDebug(`Native detector failed: ${err.message}`);
         return false;
       }
     }
 
+    // Low-light detection
+    function isLowLight(video, threshold = 50) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let total = 0;
+      for (let i = 0; i < frame.data.length; i += 4) {
+        const brightness = 0.299*frame.data[i] + 0.587*frame.data[i+1] + 0.114*frame.data[i+2];
+        total += brightness;
+      }
+      const avg = total / (canvas.width * canvas.height);
+      return avg < threshold;
+    }
+
+    function showToast(toast) {
+      toast.className = "toast show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    }
+
     // Motion detection fallback
-    let lastFrame = null;
-    function detectMotion(video, canvas, ctx) {
+    function detectMotion(video) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
       ctx.drawImage(video, 0, 0);
-      
       const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
+      let hasMotion = false;
       if (lastFrame) {
         let diff = 0;
         for (let i = 0; i < currentFrame.data.length; i += 4) {
           const r = Math.abs(currentFrame.data[i] - lastFrame.data[i]);
-          const g = Math.abs(currentFrame.data[i + 1] - lastFrame.data[i + 1]);
-          const b = Math.abs(currentFrame.data[i + 2] - lastFrame.data[i + 2]);
-          diff += (r + g + b) / 3;
+          const g = Math.abs(currentFrame.data[i+1] - lastFrame.data[i+1]);
+          const b = Math.abs(currentFrame.data[i+2] - lastFrame.data[i+2]);
+          diff += (r+g+b)/3;
         }
-        
         const avgDiff = diff / (canvas.width * canvas.height);
-        return avgDiff > 10; // Threshold for motion detection
+        hasMotion = avgDiff > 10;
       }
-      
       lastFrame = currentFrame;
-      return false;
+      return hasMotion;
     }
 
-    // Initialize
+    // Run detection
+    async function runDetection() {
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      let faceCount = 0;
+
+      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        faceCount = detections.length;
+        addDebug(`Face-api detected ${faceCount} faces`);
+      } else if (nativeFaceDetector) {
+        const faces = await nativeFaceDetector.detect(video);
+        faceCount = faces.length;
+        addDebug(`Native detector found ${faceCount} faces`);
+      } else {
+        const hasMotion = detectMotion(video);
+        faceCount = hasMotion ? 2 : 1;
+        if (hasMotion) addDebug('Motion detected - simulating multiple people');
+      }
+
+      if (faceCount > 1) showToast(faceToast);
+      if (isLowLight(video)) showToast(lowLightToast);
+    }
+
+    // Start video
+    async function startVideo() {
+      updateStatus('Requesting camera access...');
+      startBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        video.srcObject = stream;
+        updateStatus('Camera connected. Starting detection...');
+      } catch (err) {
+        addDebug(`Camera error: ${err.message}`);
+        updateStatus('Camera access failed: ' + err.message);
+        startBtn.disabled = false;
+      }
+    }
+
+    startBtn.addEventListener('click', startVideo);
+    video.addEventListener('play', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      detectionInterval = setInterval(runDetection, 1000);
+      updateStatus('Video started. Detection active.');
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+    });
+
+    // Initialize page
     async function initialize() {
       updateStatus('Checking browser support...');
-      
       if (!checkBrowserSupport()) {
         updateStatus('Browser does not support camera access');
         return;
       }
 
-      // Check if face-api is loaded
       if (typeof faceapi === 'undefined') {
-        updateStatus('Face detection library failed to load');
-        addDebug('ERROR: face-api.js not loaded');
+        updateStatus('Face-api.js failed to load');
         return;
       }
-      
-      addDebug('✓ Face-api.js loaded');
 
       const modelResult = await loadModels();
-      
       if (modelResult === true) {
-        updateStatus('Face detection ready. Click "Start Camera" to begin.');
+        updateStatus('Face detection ready. Click "Start Camera"');
       } else if (modelResult === 'native') {
         const nativeReady = await initNativeFaceDetection();
-        if (nativeReady) {
-          updateStatus('Native face detection ready. Click "Start Camera" to begin.');
-        } else {
-          updateStatus('Motion detection ready. Click "Start Camera" to begin.');
-        }
+        if (nativeReady) updateStatus('Native face detection ready. Click "Start Camera"');
+        else updateStatus('Motion detection ready. Click "Start Camera"');
       } else {
-        updateStatus('Motion detection ready. Click "Start Camera" to begin.');
+        updateStatus('Motion detection ready. Click "Start Camera"');
       }
-      
+
       startBtn.disabled = false;
     }
 
-    // Start video with user interaction
-    async function startVideo() {
-      updateStatus('Requesting camera access...');
-      startBtn.disabled = true;
-      
-      try {
-        addDebug('Calling getUserMedia...');
-        const stream = await navigator.mediaDevices.getUserMedia({ 
-          video: { 
-            width: { ideal: 640 }, 
-            height: { ideal: 480 },
-            facingMode: 'user'
-          }, 
-          audio: false 
-        });
-        
-        addDebug('✓ Got media stream');
-        video.srcObject = stream;
-        updateStatus('Camera connected. Starting video...');
-        
-      } catch (err) {
-        addDebug(`getUserMedia error: ${err.name} - ${err.message}`);
-        updateStatus('Error accessing camera: ' + err.message);
-        startBtn.disabled = false;
-        
-        if (err.name === 'NotAllowedError') {
-          updateStatus('Camera access denied. Please allow camera permissions and try again.');
-        } else if (err.name === 'NotFoundError') {
-          updateStatus('No camera found on this device.');
-        } else if (err.name === 'NotReadableError') {
-          updateStatus('Camera is being used by another application.');
-        }
-      }
-    }
-
-    // Detection function
-    async function runDetection() {
-      try {
-        if (video.videoWidth === 0 || video.videoHeight === 0) {
-          return;
-        }
-        
-        let faceCount = 0;
-        
-        // Try face-api.js first
-        if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
-          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-          faceCount = detections.length;
-          addDebug(`Face-api detected ${faceCount} faces`);
-        }
-        // Try native face detection
-        else if (nativeFaceDetector) {
-          const faces = await nativeFaceDetector.detect(video);
-          faceCount = faces.length;
-          addDebug(`Native detector found ${faceCount} faces`);
-        }
-        // Fallback to motion detection
-        else {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          const hasMotion = detectMotion(video, canvas, ctx);
-          faceCount = hasMotion ? 2 : 1; // Simulate multiple people with motion
-          if (hasMotion) addDebug('Motion detected - simulating multiple people');
-        }
-        
-        if (faceCount > 1) {
-          showToast();
-        }
-        
-      } catch (err) {
-        addDebug(`Detection error: ${err.message}`);
-      }
-    }
-
-    // Event listeners
-    startBtn.addEventListener('click', startVideo);
-
-    video.addEventListener('play', () => {
-      updateStatus('Video started. Detection active.');
-      addDebug('Video playing, starting detection');
-      
-      if (detectionInterval) {
-        clearInterval(detectionInterval);
-      }
-      
-      detectionInterval = setInterval(runDetection, 1000);
-    });
-
-    video.addEventListener('error', (e) => {
-      updateStatus('Video error occurred');
-      addDebug(`Video error: ${e}`);
-    });
-
-    function showToast() {
-      toast.className = "show";
-      setTimeout(() => { 
-        toast.className = toast.className.replace("show", ""); 
-      }, 3000);
-    }
-
-    // Cleanup
-    window.addEventListener('beforeunload', () => {
-      if (detectionInterval) {
-        clearInterval(detectionInterval);
-      }
-      if (video.srcObject) {
-        video.srcObject.getTracks().forEach(track => track.stop());
-      }
-    });
-
-    // Start when page loads
     window.addEventListener('load', initialize);
   </script>
 </body>
