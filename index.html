@@ -86,6 +86,7 @@
 </head>
 <body>
   <h1>wer bist du</h1>
+  <h3>v1.000</h3>
   <div id="status">Initializing...</div>
   <div id="debug"></div>
   <button id="startBtn" disabled>Start Camera</button>
@@ -166,7 +167,7 @@
       }
     }
 
-    // Low-light detection
+    // Enhanced low-light detection with logging
     function isLowLight(video, threshold = 50) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -180,6 +181,12 @@
         total += brightness;
       }
       const avg = total / (canvas.width * canvas.height);
+      
+      // Log brightness every few checks (not every second to avoid spam)
+      if (Math.random() < 0.2) { // 20% chance to log = roughly every 5 seconds
+        addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
+      }
+      
       return avg < threshold;
     }
 
@@ -216,7 +223,7 @@
     async function runDetection() {
       if (video.videoWidth === 0 || video.videoHeight === 0) return;
       let faceCount = 0;
-
+    
       if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
         faceCount = detections.length;
@@ -230,9 +237,14 @@
         faceCount = hasMotion ? 2 : 1;
         if (hasMotion) addDebug('Motion detected - simulating multiple people');
       }
-
+    
       if (faceCount > 1) showToast(faceToast);
-      if (isLowLight(video)) showToast(lowLightToast);
+      
+      const lowLight = isLowLight(video);
+      if (lowLight) {
+        addDebug('⚠️ Low lighting detected!');
+        showToast(lowLightToast);
+      }
     }
 
     // Start video
