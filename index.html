@@ -5,8 +5,27 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Face Detection Demo</title>
   <style>
-    body { display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
-    video { border: 2px solid #333; border-radius: 12px; margin-top: 20px; }
+    body { 
+      display: flex; 
+      flex-direction: column; 
+      align-items: center; 
+      font-family: sans-serif; 
+      margin: 0;
+      padding: 20px;
+    }
+    video { 
+      border: 2px solid #333; 
+      border-radius: 12px; 
+      margin-top: 20px;
+      max-width: 100%;
+      height: auto;
+    }
+    #status {
+      margin-top: 10px;
+      padding: 10px;
+      border-radius: 5px;
+      background-color: #f0f0f0;
+    }
     #toast {
       visibility: hidden;
       min-width: 300px;
@@ -17,6 +36,8 @@
       padding: 16px;
       position: fixed;
       bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
       z-index: 1;
       transition: visibility 0.5s, opacity 0.5s;
       opacity: 0;
@@ -29,7 +50,8 @@
 </head>
 <body>
   <h1>Face Detection POC</h1>
-  <video id="video" width="640" height="480" autoplay muted></video>
+  <div id="status">Loading...</div>
+  <video id="video" width="640" height="480" autoplay muted playsinline></video>
   <div id="toast">⚠️ Another person detected in the background!</div>
 
   <!-- Face API -->
@@ -37,31 +59,119 @@
   <script>
     const video = document.getElementById('video');
     const toast = document.getElementById('toast');
+    const status = document.getElementById('status');
+    let detectionInterval;
+
+    // Update status
+    function updateStatus(message) {
+      status.textContent = message;
+      console.log(message);
+    }
 
     // Load models from CDN
+    updateStatus('Loading face detection models...');
     Promise.all([
       faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights'),
-    ]).then(startVideo);
+    ])
+    .then(() => {
+      updateStatus('Models loaded. Starting video...');
+      startVideo();
+    })
+    .catch(err => {
+      updateStatus('Error loading models: ' + err.message);
+      console.error('Model loading error:', err);
+    });
 
     function startVideo() {
-      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
-        .then(stream => video.srcObject = stream)
-        .catch(err => console.error("Error accessing webcam:", err));
+      // Check if getUserMedia is supported
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        updateStatus('Camera access not supported in this browser');
+        return;
+      }
+
+      navigator.mediaDevices.getUserMedia({ 
+        video: { 
+          width: { ideal: 640 }, 
+          height: { ideal: 480 },
+          facingMode: 'user'
+        }, 
+        audio: false 
+      })
+      .then(stream => {
+        video.srcObject = stream;
+        updateStatus('Camera connected. Waiting for video to start...');
+        
+        // Ensure video plays
+        video.onloadedmetadata = () => {
+          video.play().catch(err => {
+            updateStatus('Error playing video: ' + err.message);
+            console.error('Video play error:', err);
+          });
+        };
+      })
+      .catch(err => {
+        updateStatus('Error accessing camera: ' + err.message);
+        console.error("Camera access error:", err);
+        
+        // Provide specific error messages
+        if (err.name === 'NotAllowedError') {
+          updateStatus('Camera access denied. Please allow camera permissions and refresh.');
+        } else if (err.name === 'NotFoundError') {
+          updateStatus('No camera found on this device.');
+        } else if (err.name === 'NotReadableError') {
+          updateStatus('Camera is being used by another application.');
+        }
+      });
     }
 
     video.addEventListener('play', () => {
-      const interval = setInterval(async () => {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        if (detections.length > 1) {
-          showToast();
+      updateStatus('Video started. Face detection active.');
+      
+      // Clear any existing interval
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
+      
+      detectionInterval = setInterval(async () => {
+        try {
+          // Make sure video is ready
+          if (video.videoWidth === 0 || video.videoHeight === 0) {
+            return;
+          }
+          
+          const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+          
+          if (detections.length > 1) {
+            showToast();
+          }
+        } catch (err) {
+          console.error('Detection error:', err);
         }
       }, 1000);
     });
 
+    video.addEventListener('error', (e) => {
+      updateStatus('Video error occurred');
+      console.error('Video error:', e);
+    });
+
     function showToast() {
       toast.className = "show";
-      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+      setTimeout(() => { 
+        toast.className = toast.className.replace("show", ""); 
+      }, 3000);
     }
+
+    // Cleanup on page unload
+    window.addEventListener('beforeunload', () => {
+      if (detectionInterval) {
+        clearInterval(detectionInterval);
+      }
+      if (video.srcObject) {
+        video.srcObject.getTracks().forEach(track => track.stop());
+      }
+    });
   </script>
 </body>
 </html>
+
