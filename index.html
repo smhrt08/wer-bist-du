@@ -76,23 +76,22 @@
       visibility: visible;
       opacity: 1;
     }
-    #faceToast {
-      background-color: #f44336;
-    }
-    #lowLightToast {
-      background-color: #ffa500;
-    }
+    #faceToast { background-color: #f44336; }
+    #lowLightToast { background-color: #ffa500; }
+    #snrToast { background-color: #6a0dad; }
   </style>
 </head>
 <body>
   <h1>wer bist du</h1>
-  <h3>v1.000</h3>
+  <h3>v2.000</h3>
   <div id="status">Initializing...</div>
   <div id="debug"></div>
   <button id="startBtn" disabled>Start Camera</button>
   <video id="video" width="640" height="480" autoplay muted playsinline></video>
+
   <div id="faceToast" class="toast">⚠️ Another person detected in the background!</div>
   <div id="lowLightToast" class="toast">⚠️ Low lighting detected!</div>
+  <div id="snrToast" class="toast">🎤 Background noise too high (low SNR)!</div>
 
   <!-- Face API CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
@@ -104,6 +103,7 @@
     const debug = document.getElementById('debug');
     const faceToast = document.getElementById('faceToast');
     const lowLightToast = document.getElementById('lowLightToast');
+    const snrToast = document.getElementById('snrToast');
     let detectionInterval;
     let nativeFaceDetector = null;
     let lastFrame = null;
@@ -116,13 +116,11 @@
       console.log(msg);
     }
 
-    // Update status
     function updateStatus(msg) {
       status.textContent = msg;
       addDebug(`STATUS: ${msg}`);
     }
 
-    // Check browser support
     function checkBrowserSupport() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         addDebug('ERROR: Camera API not supported');
@@ -132,7 +130,6 @@
       return true;
     }
 
-    // Load face-api models
     async function loadModels() {
       updateStatus('Loading face detection models...');
       try {
@@ -167,7 +164,6 @@
       }
     }
 
-    // Enhanced low-light detection with logging
     function isLowLight(video, threshold = 50) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -181,12 +177,7 @@
         total += brightness;
       }
       const avg = total / (canvas.width * canvas.height);
-      
-      // Log brightness every few checks (not every second to avoid spam)
-      if (Math.random() < 0.2) { // 20% chance to log = roughly every 5 seconds
-        addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
-      }
-      
+      if (Math.random() < 0.2) addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
       return avg < threshold;
     }
 
@@ -195,7 +186,6 @@
       setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
     }
 
-    // Motion detection fallback
     function detectMotion(video) {
       const canvas = document.createElement('canvas');
       const ctx = canvas.getContext('2d');
@@ -219,11 +209,10 @@
       return hasMotion;
     }
 
-    // Run detection
     async function runDetection() {
       if (video.videoWidth === 0 || video.videoHeight === 0) return;
       let faceCount = 0;
-    
+
       if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
         faceCount = detections.length;
@@ -237,9 +226,9 @@
         faceCount = hasMotion ? 2 : 1;
         if (hasMotion) addDebug('Motion detected - simulating multiple people');
       }
-    
+
       if (faceCount > 1) showToast(faceToast);
-      
+
       const lowLight = isLowLight(video);
       if (lowLight) {
         addDebug('⚠️ Low lighting detected!');
@@ -247,7 +236,6 @@
       }
     }
 
-    // Start video
     async function startVideo() {
       updateStatus('Requesting camera access...');
       startBtn.disabled = true;
@@ -255,10 +243,54 @@
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
         video.srcObject = stream;
         updateStatus('Camera connected. Starting detection...');
+        // Start audio SNR too
+        startAudioSNRLogging();
       } catch (err) {
         addDebug(`Camera error: ${err.message}`);
         updateStatus('Camera access failed: ' + err.message);
         startBtn.disabled = false;
+      }
+    }
+
+    // --- AUDIO SNR LOGGING ---
+    async function startAudioSNRLogging() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        const dataArray = new Float32Array(analyser.fftSize);
+
+        function computeSNR() {
+          analyser.getFloatTimeDomainData(dataArray);
+
+          let signalPower = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            signalPower += dataArray[i] * dataArray[i];
+          }
+          signalPower /= dataArray.length;
+
+          const sorted = [...dataArray].map(Math.abs).sort((a, b) => a - b);
+          const noiseSlice = sorted.slice(0, Math.floor(sorted.length * 0.1));
+          let noisePower = noiseSlice.reduce((sum, v) => sum + v * v, 0) / noiseSlice.length;
+          if (noisePower <= 0) noisePower = 1e-10;
+
+          const snrDb = 10 * Math.log10(signalPower / noisePower);
+          addDebug(`Audio SNR: ${snrDb.toFixed(2)} dB`);
+
+          if (snrDb < 10) {
+            showToast(snrToast);
+          }
+        }
+
+        setInterval(computeSNR, 1000);
+        addDebug("✓ Audio SNR logging started");
+      } catch (err) {
+        addDebug("Audio error: " + err.message);
       }
     }
 
@@ -274,19 +306,16 @@
       if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
 
-    // Initialize page
     async function initialize() {
       updateStatus('Checking browser support...');
       if (!checkBrowserSupport()) {
         updateStatus('Browser does not support camera access');
         return;
       }
-
       if (typeof faceapi === 'undefined') {
         updateStatus('Face-api.js failed to load');
         return;
       }
-
       const modelResult = await loadModels();
       if (modelResult === true) {
         updateStatus('Face detection ready. Click "Start Camera"');
@@ -297,7 +326,6 @@
       } else {
         updateStatus('Motion detection ready. Click "Start Camera"');
       }
-
       startBtn.disabled = false;
     }
 
