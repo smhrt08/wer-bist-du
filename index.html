@@ -1,0 +1,67 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Face Detection Demo</title>
+  <style>
+    body { display: flex; flex-direction: column; align-items: center; font-family: sans-serif; }
+    video { border: 2px solid #333; border-radius: 12px; margin-top: 20px; }
+    #toast {
+      visibility: hidden;
+      min-width: 300px;
+      background-color: #f44336;
+      color: white;
+      text-align: center;
+      border-radius: 8px;
+      padding: 16px;
+      position: fixed;
+      bottom: 30px;
+      z-index: 1;
+      transition: visibility 0.5s, opacity 0.5s;
+      opacity: 0;
+    }
+    #toast.show {
+      visibility: visible;
+      opacity: 1;
+    }
+  </style>
+</head>
+<body>
+  <h1>Face Detection POC</h1>
+  <video id="video" width="640" height="480" autoplay muted></video>
+  <div id="toast">⚠️ Another person detected in the background!</div>
+
+  <!-- Face API -->
+  <script defer src="https://cdn.jsdelivr.net/npm/face-api.js"></script>
+  <script>
+    const video = document.getElementById('video');
+    const toast = document.getElementById('toast');
+
+    // Load models from CDN
+    Promise.all([
+      faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/npm/face-api.js/weights'),
+    ]).then(startVideo);
+
+    function startVideo() {
+      navigator.mediaDevices.getUserMedia({ video: true, audio: false })
+        .then(stream => video.srcObject = stream)
+        .catch(err => console.error("Error accessing webcam:", err));
+    }
+
+    video.addEventListener('play', () => {
+      const interval = setInterval(async () => {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        if (detections.length > 1) {
+          showToast();
+        }
+      }, 1000);
+    });
+
+    function showToast() {
+      toast.className = "show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 3000);
+    }
+  </script>
+</body>
+</html>
