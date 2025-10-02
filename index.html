@@ -8,56 +8,107 @@
     body { 
       display: flex; 
       flex-direction: column; 
-      align-items: center; 
       font-family: sans-serif; 
       margin: 0;
       padding: 20px;
+      height: 100vh;
+      box-sizing: border-box;
     }
+    
+    .header {
+      text-align: center;
+      margin-bottom: 20px;
+    }
+    
+    .header h1 {
+      margin: 0 0 5px 0;
+    }
+    
+    .header h3 {
+      margin: 0 0 15px 0;
+    }
+    
+    .main-container {
+      display: flex;
+      flex: 1;
+      gap: 20px;
+      min-height: 0;
+    }
+    
+    .left-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
     video { 
       border: 2px solid #333; 
       border-radius: 12px; 
-      margin-top: 20px;
       max-width: 100%;
+      max-height: 70vh;
       height: auto;
+      object-fit: contain;
     }
+    
     #debug {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 5px;
+      flex: 1;
+      padding: 15px;
+      border-radius: 8px;
       background-color: #e8f4f8;
       font-family: monospace;
       font-size: 12px;
-      max-width: 600px;
       word-break: break-all;
-      max-height: 200px;
       overflow-y: auto;
+      border: 1px solid #ccc;
+      min-height: 400px;
     }
+    
+    .debug-header {
+      font-weight: bold;
+      margin-bottom: 10px;
+      font-family: sans-serif;
+      color: #333;
+      border-bottom: 1px solid #ccc;
+      padding-bottom: 5px;
+    }
+    
     button {
-      margin: 10px;
-      padding: 10px 20px;
+      padding: 12px 24px;
       font-size: 16px;
       border: none;
-      border-radius: 5px;
+      border-radius: 8px;
       background-color: #007bff;
       color: white;
       cursor: pointer;
+      transition: background-color 0.3s;
     }
+    
     button:hover {
       background-color: #0056b3;
     }
+    
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
     }
+    
     .toast {
       visibility: hidden;
       display: flex;
       width: 348px;
       height: 44px;
       min-height: 44px;
-      flex-direction: row; /* Changed from column to row for icon + text */
-      align-items: center; /* Center align icon and text vertically */
-      gap: 8px; /* Space between icon and text */
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
       flex-shrink: 0;
       border-radius: 8px;
       border: 1px solid #F0775C;
@@ -75,28 +126,55 @@
       opacity: 0;
       box-sizing: border-box;
     }
+    
     .toast.show {
       visibility: visible;
       opacity: 1;
     }
-    /* Different border colors for different toast types */
+    
     #faceToast { 
-      border-color: #F0775C; /* Error red-orange */
+      border-color: #F0775C;
     }
     #lowLightToast { 
-      border-color: #FFA500; /* Warning orange */
+      border-color: #FFA500;
     }
     #snrToast { 
-      border-color: #6a0dad; /* Purple */
+      border-color: #6a0dad;
+    }
+    
+    /* Responsive design for smaller screens */
+    @media (max-width: 768px) {
+      .main-container {
+        flex-direction: column;
+      }
+      
+      .right-panel {
+        min-height: 300px;
+      }
+      
+      video {
+        max-height: 50vh;
+      }
     }
   </style>
 </head>
 <body>
-  <h1>wer bist du</h1>
-  <h3>v2.002</h3>
-  <div id="debug"></div>
-  <button id="startBtn" disabled>Start Camera</button>
-  <video id="video" width="640" height="480" autoplay muted playsinline></video>
+  <div class="header">
+    <h1>wer bist du</h1>
+    <h3>v2.003</h3>
+    <button id="startBtn" disabled>Start Camera</button>
+  </div>
+  
+  <div class="main-container">
+    <div class="left-panel">
+      <video id="video" width="640" height="480" autoplay muted playsinline></video>
+    </div>
+    
+    <div class="right-panel">
+      <div class="debug-header">System Logs</div>
+      <div id="debug"></div>
+    </div>
+  </div>
 
   <div id="faceToast" class="toast">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
@@ -359,4 +437,3 @@
   </script>
 </body>
 </html>
-
