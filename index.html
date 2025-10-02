@@ -20,14 +20,6 @@
       max-width: 100%;
       height: auto;
     }
-    #status {
-      margin-top: 10px;
-      padding: 10px;
-      border-radius: 5px;
-      background-color: #f0f0f0;
-      max-width: 600px;
-      text-align: center;
-    }
     #debug {
       margin-top: 10px;
       padding: 10px;
@@ -83,8 +75,7 @@
 </head>
 <body>
   <h1>wer bist du</h1>
-  <h3>v2.000</h3>
-  <div id="status">Initializing...</div>
+  <h3>v2.001</h3>
   <div id="debug"></div>
   <button id="startBtn" disabled>Start Camera</button>
   <video id="video" width="640" height="480" autoplay muted playsinline></video>
@@ -99,14 +90,15 @@
   <script>
     const video = document.getElementById('video');
     const startBtn = document.getElementById('startBtn');
-    const status = document.getElementById('status');
     const debug = document.getElementById('debug');
     const faceToast = document.getElementById('faceToast');
     const lowLightToast = document.getElementById('lowLightToast');
     const snrToast = document.getElementById('snrToast');
     let detectionInterval;
+    let faceLogInterval;
     let nativeFaceDetector = null;
     let lastFrame = null;
+    let maxFacesInPeriod = 0;
 
     // Debug logging
     function addDebug(msg) {
@@ -114,11 +106,6 @@
       debug.innerHTML += `[${timestamp}] ${msg}<br>`;
       debug.scrollTop = debug.scrollHeight;
       console.log(msg);
-    }
-
-    function updateStatus(msg) {
-      status.textContent = msg;
-      addDebug(`STATUS: ${msg}`);
     }
 
     function checkBrowserSupport() {
@@ -131,7 +118,7 @@
     }
 
     async function loadModels() {
-      updateStatus('Loading face detection models...');
+      addDebug('Loading face detection models...');
       try {
         const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
         const loadPromise = Promise.all([
@@ -216,15 +203,17 @@
       if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
         faceCount = detections.length;
-        addDebug(`Face-api detected ${faceCount} faces`);
       } else if (nativeFaceDetector) {
         const faces = await nativeFaceDetector.detect(video);
         faceCount = faces.length;
-        addDebug(`Native detector found ${faceCount} faces`);
       } else {
         const hasMotion = detectMotion(video);
         faceCount = hasMotion ? 2 : 1;
-        if (hasMotion) addDebug('Motion detected - simulating multiple people');
+      }
+
+      // Track max faces in current 5-second period
+      if (faceCount > maxFacesInPeriod) {
+        maxFacesInPeriod = faceCount;
       }
 
       if (faceCount > 1) showToast(faceToast);
@@ -236,18 +225,23 @@
       }
     }
 
+    // Log max faces every 5 seconds
+    function logMaxFaces() {
+      addDebug(`Max faces detected in last 5 seconds: ${maxFacesInPeriod}`);
+      maxFacesInPeriod = 0; // Reset for next period
+    }
+
     async function startVideo() {
-      updateStatus('Requesting camera access...');
+      addDebug('Requesting camera access...');
       startBtn.disabled = true;
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
         video.srcObject = stream;
-        updateStatus('Camera connected. Starting detection...');
+        addDebug('Camera connected. Starting detection...');
         // Start audio SNR too
         startAudioSNRLogging();
       } catch (err) {
         addDebug(`Camera error: ${err.message}`);
-        updateStatus('Camera access failed: ' + err.message);
         startBtn.disabled = false;
       }
     }
@@ -297,34 +291,33 @@
     startBtn.addEventListener('click', startVideo);
     video.addEventListener('play', () => {
       if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      
       detectionInterval = setInterval(runDetection, 1000);
-      updateStatus('Video started. Detection active.');
+      faceLogInterval = setInterval(logMaxFaces, 5000);
+      
+      addDebug('Video started. Detection active.');
     });
 
     window.addEventListener('beforeunload', () => {
       if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
       if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
 
     async function initialize() {
-      updateStatus('Checking browser support...');
+      addDebug('Checking browser support...');
       if (!checkBrowserSupport()) {
-        updateStatus('Browser does not support camera access');
+        addDebug('Browser does not support camera access');
         return;
       }
       if (typeof faceapi === 'undefined') {
-        updateStatus('Face-api.js failed to load');
+        addDebug('Face-api.js failed to load');
         return;
       }
       const modelResult = await loadModels();
-      if (modelResult === true) {
-        updateStatus('Face detection ready. Click "Start Camera"');
-      } else if (modelResult === 'native') {
-        const nativeReady = await initNativeFaceDetection();
-        if (nativeReady) updateStatus('Native face detection ready. Click "Start Camera"');
-        else updateStatus('Motion detection ready. Click "Start Camera"');
-      } else {
-        updateStatus('Motion detection ready. Click "Start Camera"');
+      if (modelResult === 'native') {
+        await initNativeFaceDetection();
       }
       startBtn.disabled = false;
     }
