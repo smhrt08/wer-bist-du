@@ -51,11 +51,21 @@
     }
     .toast {
       visibility: hidden;
-      min-width: 300px;
-      color: white;
-      text-align: center;
+      display: flex;
+      width: 348px;
+      height: 44px;
+      min-height: 44px;
+      flex-direction: column;
+      align-items: flex-start;
+      gap: 10px;
+      flex-shrink: 0;
       border-radius: 8px;
-      padding: 16px;
+      border: 1px solid #F0775C;
+      background: #F9F9F9;
+      box-shadow: 0 0 8px 0 rgba(22, 51, 95, 0.10);
+      color: #333;
+      text-align: left;
+      padding: 12px 16px;
       position: fixed;
       bottom: 30px;
       left: 50%;
@@ -63,19 +73,28 @@
       z-index: 1;
       transition: visibility 0.5s, opacity 0.5s;
       opacity: 0;
+      box-sizing: border-box;
+      justify-content: center;
     }
     .toast.show {
       visibility: visible;
       opacity: 1;
     }
-    #faceToast { background-color: #f44336; }
-    #lowLightToast { background-color: #ffa500; }
-    #snrToast { background-color: #6a0dad; }
+    /* Different border colors for different toast types */
+    #faceToast { 
+      border-color: #F0775C; /* Error red-orange */
+    }
+    #lowLightToast { 
+      border-color: #FFA500; /* Warning orange */
+    }
+    #snrToast { 
+      border-color: #6a0dad; /* Purple */
+    }
   </style>
 </head>
 <body>
   <h1>wer bist du</h1>
-  <h3>v2.001</h3>
+  <h3>v2.002</h3>
   <div id="debug"></div>
   <button id="startBtn" disabled>Start Camera</button>
   <video id="video" width="640" height="480" autoplay muted playsinline></video>
@@ -326,3 +345,4 @@
   </script>
 </body>
 </html>
+
