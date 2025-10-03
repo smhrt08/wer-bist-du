@@ -49,13 +49,66 @@
       flex-direction: column;
     }
     
-    video { 
+    .video-container {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    video, canvas { 
       border: 2px solid #333; 
       border-radius: 12px; 
       max-width: 100%;
       max-height: 70vh;
       height: auto;
       object-fit: contain;
+    }
+    
+    #outputCanvas {
+      display: none;
+    }
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .toggle-switch {
+      position: relative;
+      width: 50px;
+      height: 24px;
+      background-color: #ccc;
+      border-radius: 12px;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    .toggle-switch.active {
+      background-color: #007bff;
+    }
+    
+    .toggle-slider {
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background-color: white;
+      border-radius: 50%;
+      transition: transform 0.3s;
+    }
+    
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(26px);
+    }
+    
+    .toggle-label {
+      font-size: 14px;
+      color: #333;
     }
     
     #debug {
@@ -143,7 +196,7 @@
         min-height: 300px;
       }
       
-      video {
+      video, canvas {
         max-height: 50vh;
       }
     }
@@ -152,13 +205,23 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v2.003</h3>
+    <h3>v3.000</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
   <div class="main-container">
     <div class="left-panel">
-      <video id="video" width="640" height="480" autoplay muted playsinline></video>
+      <div class="video-container">
+        <video id="video" width="640" height="480" autoplay muted playsinline></video>
+        <canvas id="outputCanvas" width="640" height="480"></canvas>
+        
+        <div class="toggle-container">
+          <span class="toggle-label">Virtual Background</span>
+          <div class="toggle-switch" id="backgroundToggle">
+            <div class="toggle-slider"></div>
+          </div>
+        </div>
+      </div>
     </div>
     
     <div class="right-panel">
@@ -190,16 +253,22 @@
 
   <script>
     const video = document.getElementById('video');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const ctx = outputCanvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
     const debug = document.getElementById('debug');
     const faceToast = document.getElementById('faceToast');
     const lowLightToast = document.getElementById('lowLightToast');
     const snrToast = document.getElementById('snrToast');
+    const backgroundToggle = document.getElementById('backgroundToggle');
+    
     let detectionInterval;
     let faceLogInterval;
+    let backgroundInterval;
     let nativeFaceDetector = null;
     let lastFrame = null;
     let maxFacesInPeriod = 0;
+    let virtualBackgroundEnabled = false;
 
     // Debug logging
     function addDebug(msg) {
@@ -207,6 +276,76 @@
       debug.innerHTML += `[${timestamp}] ${msg}<br>`;
       debug.scrollTop = debug.scrollHeight;
       console.log(msg);
+    }
+
+    // Virtual background toggle
+    backgroundToggle.addEventListener('click', () => {
+      virtualBackgroundEnabled = !virtualBackgroundEnabled;
+      backgroundToggle.classList.toggle('active', virtualBackgroundEnabled);
+      
+      if (virtualBackgroundEnabled) {
+        video.style.display = 'none';
+        outputCanvas.style.display = 'block';
+        startBackgroundProcessing();
+        addDebug('✓ Virtual background enabled');
+      } else {
+        video.style.display = 'block';
+        outputCanvas.style.display = 'none';
+        stopBackgroundProcessing();
+        addDebug('✓ Virtual background disabled');
+      }
+    });
+
+    // Simple background removal using color-based segmentation
+    function applyVirtualBackground() {
+      if (!video.videoWidth || !video.videoHeight) return;
+      
+      // Set canvas size to match video
+      outputCanvas.width = video.videoWidth;
+      outputCanvas.height = video.videoHeight;
+      
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+      
+      // Get image data
+      const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+      const data = imageData.data;
+      
+      // Simple background removal (this is a basic implementation)
+      // In a real app, you'd use more sophisticated segmentation
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Simple heuristic: if pixel is more green/blue than red (common in backgrounds)
+        // and not skin-toned, make it blue background
+        const isBackground = (g > r * 1.2 || b > r * 1.2) && 
+                           !(r > 100 && g > 80 && b > 60 && r > g && r > b);
+        
+        if (isBackground) {
+          // Replace with blue background
+          data[i] = 70;      // R
+          data[i + 1] = 130; // G  
+          data[i + 2] = 200; // B
+          // Alpha stays the same
+        }
+      }
+      
+      // Put the modified image data back
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function startBackgroundProcessing() {
+      if (backgroundInterval) clearInterval(backgroundInterval);
+      backgroundInterval = setInterval(applyVirtualBackground, 33); // ~30 FPS
+    }
+
+    function stopBackgroundProcessing() {
+      if (backgroundInterval) {
+        clearInterval(backgroundInterval);
+        backgroundInterval = null;
+      }
     }
 
     function checkBrowserSupport() {
@@ -403,6 +542,7 @@
     window.addEventListener('beforeunload', () => {
       if (detectionInterval) clearInterval(detectionInterval);
       if (faceLogInterval) clearInterval(faceLogInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
       if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
 
@@ -427,3 +567,4 @@
   </script>
 </body>
 </html>
+
