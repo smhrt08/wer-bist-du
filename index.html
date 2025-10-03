@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.003</h3>
+    <h3>v3.004</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -416,10 +416,8 @@
       // Draw blue background first
       drawBackground();
       
-      // Debug: Check if we have segmentation data
+      // Check if we have segmentation data
       if (results.segmentationMask) {
-        addDebug('✓ MediaPipe segmentation mask received');
-        
         // Create temporary canvas for mask processing
         const maskCanvas = document.createElement('canvas');
         const maskCtx = maskCanvas.getContext('2d');
@@ -440,9 +438,8 @@
         
         // Apply mask - keep person, make background transparent
         for (let i = 0; i < frameData.data.length; i += 4) {
-          const maskValue = maskData.data[i]; // Use red channel as mask
-          if (maskValue < 128) { // Background pixel (MediaPipe uses 0-255, person is white/255, background is black/0)
-            // Make background transparent
+          const maskValue = maskData.data[i];
+          if (maskValue > 128) { // Background pixel
             frameData.data[i + 3] = 0; // Set alpha to 0
           }
         }
@@ -452,11 +449,12 @@
         ctx.drawImage(tempCanvas, 0, 0);
         
       } else {
-        addDebug('⚠️ No MediaPipe segmentation mask - using fallback');
         // Fallback: just draw the video over blue background
         ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
       }
     }
+    
+
 
     // Draw different background types
     function drawBackground() {
@@ -466,8 +464,6 @@
 
     // Fallback simple background processing
     function startSimpleBackgroundProcessing() {
-      addDebug('Using simple background processing fallback');
-      
       const processFrame = () => {
         if (!virtualBackgroundEnabled) return;
         
@@ -524,8 +520,6 @@
       processFrame();
     }
     
-
-
     function checkBrowserSupport() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
         addDebug('ERROR: Camera API not supported');
