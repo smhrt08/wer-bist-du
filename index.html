@@ -70,17 +70,11 @@
       display: none;
     }
     
-    .controls-container {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: center;
-    }
-    
     .toggle-container {
       display: flex;
       align-items: center;
       gap: 10px;
+      margin-top: 10px;
     }
     
     .toggle-switch {
@@ -115,32 +109,6 @@
     .toggle-label {
       font-size: 14px;
       color: #333;
-    }
-    
-    .speaker-controls {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    
-    .speaker-button {
-      padding: 8px 16px;
-      font-size: 12px;
-      border: none;
-      border-radius: 6px;
-      background-color: #28a745;
-      color: white;
-      cursor: pointer;
-      transition: background-color 0.3s;
-    }
-    
-    .speaker-button:hover {
-      background-color: #218838;
-    }
-    
-    .speaker-button:disabled {
-      background-color: #ccc;
-      cursor: not-allowed;
     }
     
     #debug {
@@ -208,10 +176,17 @@
       opacity: 1;
     }
     
-    #faceToast { border-color: #F0775C; }
-    #lowLightToast { border-color: #FFA500; }
-    #snrToast { border-color: #6a0dad; }
+    #faceToast { 
+      border-color: #F0775C;
+    }
+    #lowLightToast { 
+      border-color: #FFA500;
+    }
+    #snrToast { 
+      border-color: #6a0dad;
+    }
     
+    /* Responsive design for smaller screens */
     @media (max-width: 768px) {
       .main-container {
         flex-direction: column;
@@ -230,7 +205,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.002</h3>
+    <h3>v3.000</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -240,17 +215,10 @@
         <video id="video" width="640" height="480" autoplay muted playsinline></video>
         <canvas id="outputCanvas" width="640" height="480"></canvas>
         
-        <div class="controls-container">
-          <div class="toggle-container">
-            <span class="toggle-label">Virtual Background</span>
-            <div class="toggle-switch" id="backgroundToggle">
-              <div class="toggle-slider"></div>
-            </div>
-          </div>
-          
-          <div class="speaker-controls">
-            <button class="speaker-button" id="setPrimarySpeaker">Set Primary Speaker</button>
-            <button class="speaker-button" id="resetSpeaker">Reset Speaker</button>
+        <div class="toggle-container">
+          <span class="toggle-label">Virtual Background</span>
+          <div class="toggle-switch" id="backgroundToggle">
+            <div class="toggle-slider"></div>
           </div>
         </div>
       </div>
@@ -261,13 +229,26 @@
     </div>
   </div>
 
-  <div id="faceToast" class="toast">Background person detected!</div>
-  <div id="lowLightToast" class="toast">Low lighting detected!</div>
-  <div id="snrToast" class="toast">Background noise too high (low SNR)!</div>
+  <div id="faceToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#D42802" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Another person detected in the background!
+  </div>
+  <div id="lowLightToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#FFA500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Low lighting detected!
+  </div>
+  <div id="snrToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12 2C6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Background noise too high (low SNR)!
+  </div>
 
-  <!-- MediaPipe + Face API -->
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+  <!-- Face API CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
 
   <script>
@@ -280,15 +261,16 @@
     const lowLightToast = document.getElementById('lowLightToast');
     const snrToast = document.getElementById('snrToast');
     const backgroundToggle = document.getElementById('backgroundToggle');
-    const setPrimarySpeakerBtn = document.getElementById('setPrimarySpeaker');
-    const resetSpeakerBtn = document.getElementById('resetSpeaker');
     
+    let detectionInterval;
+    let faceLogInterval;
+    let backgroundInterval;
+    let nativeFaceDetector = null;
     let lastFrame = null;
     let maxFacesInPeriod = 0;
     let virtualBackgroundEnabled = false;
-    let selfieSegmentation = null;
-    let camera = null;
 
+    // Debug logging
     function addDebug(msg) {
       const timestamp = new Date().toLocaleTimeString();
       debug.innerHTML += `[${timestamp}] ${msg}<br>`;
@@ -296,9 +278,117 @@
       console.log(msg);
     }
 
-    function showToast(toast) {
-      toast.className = "toast show";
-      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 5000);
+    // Virtual background toggle
+    backgroundToggle.addEventListener('click', () => {
+      virtualBackgroundEnabled = !virtualBackgroundEnabled;
+      backgroundToggle.classList.toggle('active', virtualBackgroundEnabled);
+      
+      if (virtualBackgroundEnabled) {
+        video.style.display = 'none';
+        outputCanvas.style.display = 'block';
+        startBackgroundProcessing();
+        addDebug('✓ Virtual background enabled');
+      } else {
+        video.style.display = 'block';
+        outputCanvas.style.display = 'none';
+        stopBackgroundProcessing();
+        addDebug('✓ Virtual background disabled');
+      }
+    });
+
+    // Simple background removal using color-based segmentation
+    function applyVirtualBackground() {
+      if (!video.videoWidth || !video.videoHeight) return;
+      
+      // Set canvas size to match video
+      outputCanvas.width = video.videoWidth;
+      outputCanvas.height = video.videoHeight;
+      
+      // Draw video frame to canvas
+      ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+      
+      // Get image data
+      const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+      const data = imageData.data;
+      
+      // Simple background removal (this is a basic implementation)
+      // In a real app, you'd use more sophisticated segmentation
+      for (let i = 0; i < data.length; i += 4) {
+        const r = data[i];
+        const g = data[i + 1];
+        const b = data[i + 2];
+        
+        // Simple heuristic: if pixel is more green/blue than red (common in backgrounds)
+        // and not skin-toned, make it blue background
+        const isBackground = (g > r * 1.2 || b > r * 1.2) && 
+                           !(r > 100 && g > 80 && b > 60 && r > g && r > b);
+        
+        if (isBackground) {
+          // Replace with blue background
+          data[i] = 70;      // R
+          data[i + 1] = 130; // G  
+          data[i + 2] = 200; // B
+          // Alpha stays the same
+        }
+      }
+      
+      // Put the modified image data back
+      ctx.putImageData(imageData, 0, 0);
+    }
+
+    function startBackgroundProcessing() {
+      if (backgroundInterval) clearInterval(backgroundInterval);
+      backgroundInterval = setInterval(applyVirtualBackground, 33); // ~30 FPS
+    }
+
+    function stopBackgroundProcessing() {
+      if (backgroundInterval) {
+        clearInterval(backgroundInterval);
+        backgroundInterval = null;
+      }
+    }
+
+    function checkBrowserSupport() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        addDebug('ERROR: Camera API not supported');
+        return false;
+      }
+      addDebug('✓ Camera API supported');
+      return true;
+    }
+
+    async function loadModels() {
+      addDebug('Loading face detection models...');
+      try {
+        const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
+        const loadPromise = Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+          faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
+          faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
+        ]);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Model loading timeout')), 15000));
+        await Promise.race([loadPromise, timeoutPromise]);
+        addDebug('✓ Models loaded');
+        return true;
+      } catch (err) {
+        addDebug(`Model load failed: ${err.message}`);
+        if ('FaceDetector' in window) {
+          addDebug('Using native FaceDetector fallback');
+          return 'native';
+        }
+        addDebug('Using motion detection fallback');
+        return 'motion';
+      }
+    }
+
+    async function initNativeFaceDetection() {
+      try {
+        nativeFaceDetector = new FaceDetector({ maxDetectedFaces: 10, fastMode: false });
+        return true;
+      } catch (err) {
+        addDebug(`Native detector failed: ${err.message}`);
+        return false;
+      }
     }
 
     function isLowLight(video, threshold = 50) {
@@ -314,7 +404,86 @@
         total += brightness;
       }
       const avg = total / (canvas.width * canvas.height);
+      if (Math.random() < 0.2) addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
       return avg < threshold;
+    }
+
+    function showToast(toast) {
+      toast.className = "toast show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 8000);
+    }
+
+    function detectMotion(video) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let hasMotion = false;
+      if (lastFrame) {
+        let diff = 0;
+        for (let i = 0; i < currentFrame.data.length; i += 4) {
+          const r = Math.abs(currentFrame.data[i] - lastFrame.data[i]);
+          const g = Math.abs(currentFrame.data[i+1] - lastFrame.data[i+1]);
+          const b = Math.abs(currentFrame.data[i+2] - lastFrame.data[i+2]);
+          diff += (r+g+b)/3;
+        }
+        const avgDiff = diff / (canvas.width * canvas.height);
+        hasMotion = avgDiff > 10;
+      }
+      lastFrame = currentFrame;
+      return hasMotion;
+    }
+
+    async function runDetection() {
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      let faceCount = 0;
+
+      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        faceCount = detections.length;
+      } else if (nativeFaceDetector) {
+        const faces = await nativeFaceDetector.detect(video);
+        faceCount = faces.length;
+      } else {
+        const hasMotion = detectMotion(video);
+        faceCount = hasMotion ? 2 : 1;
+      }
+
+      // Track max faces in current 5-second period
+      if (faceCount > maxFacesInPeriod) {
+        maxFacesInPeriod = faceCount;
+      }
+
+      if (faceCount > 0) showToast(faceToast);
+
+      const lowLight = isLowLight(video);
+      if (lowLight) {
+        addDebug('⚠️ Low lighting detected!');
+        showToast(lowLightToast);
+      }
+    }
+
+    // Log max faces every 5 seconds
+    function logMaxFaces() {
+      addDebug(`Max faces detected in last 5 seconds: ${maxFacesInPeriod}`);
+      maxFacesInPeriod = 0; // Reset for next period
+    }
+
+    async function startVideo() {
+      addDebug('Requesting camera access...');
+      startBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        video.srcObject = stream;
+        addDebug('Camera connected. Starting detection...');
+        // Start audio SNR too
+        startAudioSNRLogging();
+      } catch (err) {
+        addDebug(`Camera error: ${err.message}`);
+        startBtn.disabled = false;
+      }
     }
 
     // --- AUDIO SNR LOGGING ---
@@ -341,35 +510,60 @@
 
           const sorted = [...dataArray].map(Math.abs).sort((a, b) => a - b);
           const noiseSlice = sorted.slice(0, Math.floor(sorted.length * 0.1));
-          let noisePower = noiseSlice.reduce((a, b) => a + b*b, 0) / noiseSlice.length;
+          let noisePower = noiseSlice.reduce((sum, v) => sum + v * v, 0) / noiseSlice.length;
+          if (noisePower <= 0) noisePower = 1e-10;
 
-          const snr = 10 * Math.log10(signalPower / (noisePower || 1e-9));
-          addDebug(`SNR: ${snr.toFixed(2)} dB`);
+          const snrDb = 10 * Math.log10(signalPower / noisePower);
+          addDebug(`Audio SNR: ${snrDb.toFixed(2)} dB`);
 
-          if (snr < 15) { // arbitrary threshold
+          if (snrDb < 10) {
             showToast(snrToast);
           }
         }
-        setInterval(computeSNR, 3000);
+
+        setInterval(computeSNR, 1000);
+        addDebug("✓ Audio SNR logging started");
       } catch (err) {
-        addDebug(`Audio SNR error: ${err.message}`);
+        addDebug("Audio error: " + err.message);
       }
     }
 
-    async function startVideo() {
-      addDebug('Requesting camera access...');
-      try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: true });
-        video.srcObject = stream;
-        addDebug('Camera connected.');
-        startAudioSNRLogging();
-      } catch (err) {
-        addDebug(`Camera error: ${err.message}`);
-      }
-    }
-
-    startBtn.disabled = false;
     startBtn.addEventListener('click', startVideo);
+    video.addEventListener('play', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      
+      detectionInterval = setInterval(runDetection, 1000);
+      faceLogInterval = setInterval(logMaxFaces, 5000);
+      
+      addDebug('Video started. Detection active.');
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      if (backgroundInterval) clearInterval(backgroundInterval);
+      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+    });
+
+    async function initialize() {
+      addDebug('Checking browser support...');
+      if (!checkBrowserSupport()) {
+        addDebug('Browser does not support camera access');
+        return;
+      }
+      if (typeof faceapi === 'undefined') {
+        addDebug('Face-api.js failed to load');
+        return;
+      }
+      const modelResult = await loadModels();
+      if (modelResult === 'native') {
+        await initNativeFaceDetection();
+      }
+      startBtn.disabled = false;
+    }
+
+    window.addEventListener('load', initialize);
   </script>
 </body>
 </html>
