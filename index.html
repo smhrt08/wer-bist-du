@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.004</h3>
+    <h3>v3.006</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -265,6 +265,12 @@
             </div>
           </div>
           
+          <div class="toggle-container">
+            <span class="toggle-label">Ghost Mode</span>
+            <div class="toggle-switch" id="ghostToggle">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
@@ -322,7 +328,8 @@
     let virtualBackgroundEnabled = false;
     let selfieSegmentation = null;
     let camera = null;
-    // let selectedBackground = 'gradient';
+    let ghostModeEnabled = false;
+    const ghostToggle = document.getElementById('ghostToggle');
 
     // Debug logging
     function addDebug(msg) {
@@ -331,16 +338,6 @@
       debug.scrollTop = debug.scrollHeight;
       console.log(msg);
     }
-
-    // Background selection
-    // document.querySelectorAll('.bg-option').forEach(option => {
-    //   option.addEventListener('click', () => {
-    //     document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('selected'));
-    //     option.classList.add('selected');
-    //     selectedBackground = option.dataset.type;
-    //     addDebug(`Background changed to: ${selectedBackground}`);
-    //   });
-    // });
 
     // Virtual background toggle
     backgroundToggle.addEventListener('click', async () => {
@@ -361,6 +358,18 @@
           camera.stop();
         }
         addDebug('✓ Virtual background disabled');
+      }
+    });
+
+    // Ghost Mode toggle
+    ghostToggle.addEventListener('click', () => {
+      ghostModeEnabled = !ghostModeEnabled;
+      ghostToggle.classList.toggle('active', ghostModeEnabled);
+      
+      if (ghostModeEnabled) {
+        addDebug('✓ Ghost mode enabled');
+      } else {
+        addDebug('✓ Ghost mode disabled');
       }
     });
 
