@@ -439,7 +439,7 @@
         // Apply mask - keep person, make background transparent
         for (let i = 0; i < frameData.data.length; i += 4) {
           const maskValue = maskData.data[i];
-          if (maskValue > 128) { // Background pixel
+          if (maskValue < 128) { // Background pixel
             frameData.data[i + 3] = 0; // Set alpha to 0
           }
         }
