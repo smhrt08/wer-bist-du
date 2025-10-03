@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.002</h3>
+    <h3>v3.003</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -413,11 +413,13 @@
       // Clear canvas
       ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
       
-      // Draw background
+      // Draw blue background first
       drawBackground();
       
-      // Create mask from segmentation
+      // Debug: Check if we have segmentation data
       if (results.segmentationMask) {
+        addDebug('✓ MediaPipe segmentation mask received');
+        
         // Create temporary canvas for mask processing
         const maskCanvas = document.createElement('canvas');
         const maskCtx = maskCanvas.getContext('2d');
@@ -428,23 +430,30 @@
         maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
         const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
         
-        // Draw video frame
-        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-        const frameData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+        // Draw video frame to a temporary canvas
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         
-        // Apply mask - keep person, replace background
+        // Apply mask - keep person, make background transparent
         for (let i = 0; i < frameData.data.length; i += 4) {
           const maskValue = maskData.data[i]; // Use red channel as mask
-          if (maskValue < 128) { // Background pixel
-            // Make transparent so background shows through
+          if (maskValue < 128) { // Background pixel (MediaPipe uses 0-255, person is white/255, background is black/0)
+            // Make background transparent
             frameData.data[i + 3] = 0; // Set alpha to 0
           }
         }
         
-        // Draw the masked person on top of background
-        ctx.putImageData(frameData, 0, 0);
+        // Put the masked person on top of blue background
+        tempCtx.putImageData(frameData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
+        
       } else {
-        // Fallback: just draw the video
+        addDebug('⚠️ No MediaPipe segmentation mask - using fallback');
+        // Fallback: just draw the video over blue background
         ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
       }
     }
@@ -457,6 +466,8 @@
 
     // Fallback simple background processing
     function startSimpleBackgroundProcessing() {
+      addDebug('Using simple background processing fallback');
+      
       const processFrame = () => {
         if (!virtualBackgroundEnabled) return;
         
@@ -464,18 +475,23 @@
         outputCanvas.width = video.videoWidth;
         outputCanvas.height = video.videoHeight;
         
-        // Draw background first
+        // Draw blue background first
         drawBackground();
         
-        // Draw video frame
-        ctx.globalCompositeOperation = 'source-over';
-        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+        // Create temporary canvas for processing
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+        
+        // Draw video frame to temp canvas
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
         
         // Get image data for processing
-        const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         const data = imageData.data;
         
-        // Simple background removal (improved version)
+        // Simple background removal
         for (let i = 0; i < data.length; i += 4) {
           const r = data[i];
           const g = data[i + 1];
@@ -484,17 +500,13 @@
           // Better heuristic for background detection
           const brightness = (r + g + b) / 3;
           const isBackground = (
-            // Green screen detection
-            (g > r * 1.5 && g > b * 1.5) ||
-            // Blue screen detection  
-            (b > r * 1.5 && b > g * 1.2) ||
-            // Very bright or very dark areas (likely background)
-            (brightness > 200 || brightness < 50) ||
+            // Very bright areas (likely background)
+            brightness > 180 ||
             // Areas with low color variation (likely uniform background)
-            (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && Math.abs(r - b) < 20 && brightness < 150)
+            (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 && brightness < 120)
           ) && 
           // Exclude skin tones
-          !(r > 95 && g > 40 && b > 20 && r > g && r > b && (r - g) > 15);
+          !(r > 95 && g > 40 && b > 20 && r > g && r > b);
           
           if (isBackground) {
             // Make background transparent
@@ -502,18 +514,17 @@
           }
         }
         
-        // Clear canvas and redraw background
-        ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-        drawBackground();
-        
-        // Draw the masked person
-        ctx.putImageData(imageData, 0, 0);
+        // Put processed image data back and draw on main canvas
+        tempCtx.putImageData(imageData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
         
         requestAnimationFrame(processFrame);
       };
       
       processFrame();
     }
+    
+
 
     function checkBrowserSupport() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
