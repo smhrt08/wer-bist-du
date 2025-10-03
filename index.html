@@ -70,11 +70,17 @@
       display: none;
     }
     
+    .controls-container {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    
     .toggle-container {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 10px;
     }
     
     .toggle-switch {
@@ -109,6 +115,32 @@
     .toggle-label {
       font-size: 14px;
       color: #333;
+    }
+    
+    .speaker-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+    
+    .speaker-button {
+      padding: 8px 16px;
+      font-size: 12px;
+      border: none;
+      border-radius: 6px;
+      background-color: #28a745;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    .speaker-button:hover {
+      background-color: #218838;
+    }
+    
+    .speaker-button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
     }
     
     #debug {
@@ -205,7 +237,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.000</h3>
+    <h3>v3.001</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -215,10 +247,17 @@
         <video id="video" width="640" height="480" autoplay muted playsinline></video>
         <canvas id="outputCanvas" width="640" height="480"></canvas>
         
-        <div class="toggle-container">
-          <span class="toggle-label">Virtual Background</span>
-          <div class="toggle-switch" id="backgroundToggle">
-            <div class="toggle-slider"></div>
+        <div class="controls-container">
+          <div class="toggle-container">
+            <span class="toggle-label">Virtual Background</span>
+            <div class="toggle-switch" id="backgroundToggle">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
+          
+          <div class="speaker-controls">
+            <button class="speaker-button" id="setPrimarySpeaker">Set Primary Speaker</button>
+            <button class="speaker-button" id="resetSpeaker">Reset Speaker</button>
           </div>
         </div>
       </div>
@@ -233,20 +272,25 @@
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
       <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#D42802" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    Another person detected in the background!
+    Background person detected!
   </div>
   <div id="lowLightToast" class="toast">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
       <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#FFA500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Low lighting detected!
-  </div>
-  <div id="snrToast" class="toast">
+  </div>  <div id="snrToast" class="toast">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
       <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12 2C6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Background noise too high (low SNR)!
   </div>
+
+  <!-- MediaPipe CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
 
   <!-- Face API CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
@@ -261,14 +305,164 @@
     const lowLightToast = document.getElementById('lowLightToast');
     const snrToast = document.getElementById('snrToast');
     const backgroundToggle = document.getElementById('backgroundToggle');
+    const setPrimarySpeakerBtn = document.getElementById('setPrimarySpeaker');
+    const resetSpeakerBtn = document.getElementById('resetSpeaker');
     
     let detectionInterval;
     let faceLogInterval;
-    let backgroundInterval;
     let nativeFaceDetector = null;
     let lastFrame = null;
     let maxFacesInPeriod = 0;
     let virtualBackgroundEnabled = false;
+    let primarySpeakerDescriptor = null;
+    let selfieSegmentation = null;
+    let camera = null;
+
+    // Speaker Analysis Class
+    class SpeakerAnalyzer {
+      constructor() {
+        this.primarySpeakerDescriptor = null;
+        this.setupMediaPipe();
+      }
+
+      async setupMediaPipe() {
+        try {
+          selfieSegmentation = new SelfieSegmentation({
+            locateFile: (file) => {
+              return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+            }
+          });
+
+          selfieSegmentation.setOptions({
+            modelSelection: 1, // 0 for general, 1 for landscape
+            selfieMode: true,
+          });
+
+          selfieSegmentation.onResults(this.onSegmentationResults.bind(this));
+          addDebug('✓ MediaPipe Selfie Segmentation loaded');
+        } catch (err) {
+          addDebug(`MediaPipe setup failed: ${err.message}`);
+        }
+      }
+
+      onSegmentationResults(results) {
+        if (!virtualBackgroundEnabled) return;
+        
+        const canvas = outputCanvas;
+        const canvasCtx = canvas.getContext('2d');
+        
+        canvas.width = results.image.width;
+        canvas.height = results.image.height;
+
+        // Clear canvas
+        canvasCtx.clearRect(0, 0, canvas.width, canvas.height);
+
+        // Draw blue background
+        canvasCtx.fillStyle = '#4682B4';
+        canvasCtx.fillRect(0, 0, canvas.width, canvas.height);
+
+        // Only draw the person (foreground)
+        canvasCtx.globalCompositeOperation = 'source-atop';
+        canvasCtx.drawImage(results.segmentationMask, 0, 0, canvas.width, canvas.height);
+
+        canvasCtx.globalCompositeOperation = 'source-over';
+        canvasCtx.drawImage(results.image, 0, 0, canvas.width, canvas.height);
+      }
+
+      async analyzeSpeakers() {
+        if (video.videoWidth === 0 || video.videoHeight === 0) return;
+
+        try {
+          // Use face-api.js for face recognition
+          const faceDescriptors = await faceapi
+            .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+            .withFaceLandmarks()
+            .withFaceDescriptors();
+
+          if (faceDescriptors.length === 0) return;
+
+          // Track max faces for logging
+          if (faceDescriptors.length > maxFacesInPeriod) {
+            maxFacesInPeriod = faceDescriptors.length;
+          }
+
+          this.identifyPrimaryAndBackground(faceDescriptors);
+
+        } catch (err) {
+          addDebug(`Speaker analysis error: ${err.message}`);
+        }
+      }
+
+      identifyPrimaryAndBackground(descriptors) {
+        if (!this.primarySpeakerDescriptor) {
+          // No primary speaker set yet
+          if (descriptors.length > 1) {
+            addDebug(`${descriptors.length} faces detected - set primary speaker first`);
+          }
+          return;
+        }
+
+        let primaryFound = false;
+        let backgroundCount = 0;
+
+        descriptors.forEach((desc, index) => {
+          const distance = faceapi.euclideanDistance(
+            this.primarySpeakerDescriptor, 
+            desc.descriptor
+          );
+
+          if (distance < 0.5) { // Same person threshold
+            primaryFound = true;
+          } else {
+            backgroundCount++;
+          }
+        });
+
+        if (backgroundCount > 0) {
+          addDebug(`Background speaker detected (${backgroundCount} additional faces)`);
+          showToast(faceToast);
+        }
+      }
+
+      setPrimarySpeaker() {
+        faceapi
+          .detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+          .withFaceLandmarks()
+          .withFaceDescriptors()
+          .then(faceDescriptors => {
+            if (faceDescriptors.length === 0) {
+              addDebug('No faces detected - cannot set primary speaker');
+              return;
+            }
+
+            // Use the largest face as primary speaker
+            const largestFace = faceDescriptors.reduce((largest, current) => {
+              const largestArea = largest.detection.box.width * largest.detection.box.height;
+              const currentArea = current.detection.box.width * current.detection.box.height;
+              return currentArea > largestArea ? current : largest;
+            });
+
+            this.primarySpeakerDescriptor = largestFace.descriptor;
+            addDebug('✓ Primary speaker set');
+            setPrimarySpeakerBtn.textContent = 'Primary Speaker Set';
+            setPrimarySpeakerBtn.disabled = true;
+            resetSpeakerBtn.disabled = false;
+          })
+          .catch(err => {
+            addDebug(`Error setting primary speaker: ${err.message}`);
+          });
+      }
+
+      resetSpeaker() {
+        this.primarySpeakerDescriptor = null;
+        addDebug('Primary speaker reset');
+        setPrimarySpeakerBtn.textContent = 'Set Primary Speaker';
+        setPrimarySpeakerBtn.disabled = false;
+        resetSpeakerBtn.disabled = true;
+      }
+    }
+
+    const speakerAnalyzer = new SpeakerAnalyzer();
 
     // Debug logging
     function addDebug(msg) {
@@ -286,67 +480,22 @@
       if (virtualBackgroundEnabled) {
         video.style.display = 'none';
         outputCanvas.style.display = 'block';
-        startBackgroundProcessing();
         addDebug('✓ Virtual background enabled');
       } else {
         video.style.display = 'block';
         outputCanvas.style.display = 'none';
-        stopBackgroundProcessing();
         addDebug('✓ Virtual background disabled');
       }
     });
 
-    // Simple background removal using color-based segmentation
-    function applyVirtualBackground() {
-      if (!video.videoWidth || !video.videoHeight) return;
-      
-      // Set canvas size to match video
-      outputCanvas.width = video.videoWidth;
-      outputCanvas.height = video.videoHeight;
-      
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-      
-      // Get image data
-      const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
-      const data = imageData.data;
-      
-      // Simple background removal (this is a basic implementation)
-      // In a real app, you'd use more sophisticated segmentation
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
-        
-        // Simple heuristic: if pixel is more green/blue than red (common in backgrounds)
-        // and not skin-toned, make it blue background
-        const isBackground = (g > r * 1.2 || b > r * 1.2) && 
-                           !(r > 100 && g > 80 && b > 60 && r > g && r > b);
-        
-        if (isBackground) {
-          // Replace with blue background
-          data[i] = 70;      // R
-          data[i + 1] = 130; // G  
-          data[i + 2] = 200; // B
-          // Alpha stays the same
-        }
-      }
-      
-      // Put the modified image data back
-      ctx.putImageData(imageData, 0, 0);
-    }
+    // Speaker control buttons
+    setPrimarySpeakerBtn.addEventListener('click', () => {
+      speakerAnalyzer.setPrimarySpeaker();
+    });
 
-    function startBackgroundProcessing() {
-      if (backgroundInterval) clearInterval(backgroundInterval);
-      backgroundInterval = setInterval(applyVirtualBackground, 33); // ~30 FPS
-    }
-
-    function stopBackgroundProcessing() {
-      if (backgroundInterval) {
-        clearInterval(backgroundInterval);
-        backgroundInterval = null;
-      }
-    }
+    resetSpeakerBtn.addEventListener('click', () => {
+      speakerAnalyzer.resetSpeaker();
+    });
 
     function checkBrowserSupport() {
       if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
@@ -368,7 +517,7 @@
         ]);
         const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Model loading timeout')), 15000));
         await Promise.race([loadPromise, timeoutPromise]);
-        addDebug('✓ Models loaded');
+        addDebug('✓ Face-api models loaded');
         return true;
       } catch (err) {
         addDebug(`Model load failed: ${err.message}`);
@@ -438,26 +587,16 @@
 
     async function runDetection() {
       if (video.videoWidth === 0 || video.videoHeight === 0) return;
-      let faceCount = 0;
 
-      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        faceCount = detections.length;
-      } else if (nativeFaceDetector) {
-        const faces = await nativeFaceDetector.detect(video);
-        faceCount = faces.length;
-      } else {
-        const hasMotion = detectMotion(video);
-        faceCount = hasMotion ? 2 : 1;
+      // Run speaker analysis
+      await speakerAnalyzer.analyzeSpeakers();
+
+      // Send frame to MediaPipe for background processing
+      if (selfieSegmentation && virtualBackgroundEnabled) {
+        await selfieSegmentation.send({image: video});
       }
 
-      // Track max faces in current 5-second period
-      if (faceCount > maxFacesInPeriod) {
-        maxFacesInPeriod = faceCount;
-      }
-
-      if (faceCount > 0) showToast(faceToast);
-
+      // Check low light
       const lowLight = isLowLight(video);
       if (lowLight) {
         addDebug('⚠️ Low lighting detected!');
@@ -475,9 +614,26 @@
       addDebug('Requesting camera access...');
       startBtn.disabled = true;
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { width: 640, height: 480 }, 
+          audio: false 
+        });
         video.srcObject = stream;
         addDebug('Camera connected. Starting detection...');
+        
+        // Initialize MediaPipe camera
+        if (selfieSegmentation) {
+          camera = new Camera(video, {
+            onFrame: async () => {
+              if (virtualBackgroundEnabled) {
+                await selfieSegmentation.send({image: video});
+              }
+            },
+            width: 640,
+            height: 480
+          });
+        }
+        
         // Start audio SNR too
         startAudioSNRLogging();
       } catch (err) {
@@ -536,13 +692,18 @@
       detectionInterval = setInterval(runDetection, 1000);
       faceLogInterval = setInterval(logMaxFaces, 5000);
       
+      // Start MediaPipe camera if available
+      if (camera) {
+        camera.start();
+      }
+      
       addDebug('Video started. Detection active.');
     });
 
     window.addEventListener('beforeunload', () => {
       if (detectionInterval) clearInterval(detectionInterval);
       if (faceLogInterval) clearInterval(faceLogInterval);
-      if (backgroundInterval) clearInterval(backgroundInterval);
+      if (camera) camera.stop();
       if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
 
@@ -556,11 +717,17 @@
         addDebug('Face-api.js failed to load');
         return;
       }
+      
       const modelResult = await loadModels();
       if (modelResult === 'native') {
         await initNativeFaceDetection();
       }
+      
+      // Initialize speaker analyzer
+      await speakerAnalyzer.setupMediaPipe();
+      
       startBtn.disabled = false;
+      resetSpeakerBtn.disabled = true;
     }
 
     window.addEventListener('load', initialize);
