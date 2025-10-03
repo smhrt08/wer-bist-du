@@ -70,11 +70,17 @@
       display: none;
     }
     
+    .controls {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
+    }
+    
     .toggle-container {
       display: flex;
       align-items: center;
       gap: 10px;
-      margin-top: 10px;
     }
     
     .toggle-switch {
@@ -109,6 +115,42 @@
     .toggle-label {
       font-size: 14px;
       color: #333;
+    }
+    
+    .background-selector {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .bg-option {
+      width: 60px;
+      height: 40px;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+    
+    .bg-option.selected {
+      border-color: #007bff;
+    }
+    
+    .bg-blur {
+      background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                  linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                  linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                  linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    }
+    
+    .bg-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .bg-solid {
+      background: #4CAF50;
     }
     
     #debug {
@@ -205,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.000</h3>
+    <h3>v3.001</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -215,10 +257,18 @@
         <video id="video" width="640" height="480" autoplay muted playsinline></video>
         <canvas id="outputCanvas" width="640" height="480"></canvas>
         
-        <div class="toggle-container">
-          <span class="toggle-label">Virtual Background</span>
-          <div class="toggle-switch" id="backgroundToggle">
-            <div class="toggle-slider"></div>
+        <div class="controls">
+          <div class="toggle-container">
+            <span class="toggle-label">Virtual Background</span>
+            <div class="toggle-switch" id="backgroundToggle">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
+          
+          <div class="background-selector" id="backgroundSelector" style="display: none;">
+            <div class="bg-option bg-blur" data-type="blur" title="Blur Background"></div>
+            <div class="bg-option bg-gradient selected" data-type="gradient" title="Gradient Background"></div>
+            <div class="bg-option bg-solid" data-type="solid" title="Solid Background"></div>
           </div>
         </div>
       </div>
@@ -243,11 +293,17 @@
   </div>
   <div id="snrToast" class="toast">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
-      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12 2C6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
     Background noise too high (low SNR)!
   </div>
 
+  <!-- MediaPipe -->
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
+  
   <!-- Face API CDN -->
   <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
 
@@ -261,14 +317,17 @@
     const lowLightToast = document.getElementById('lowLightToast');
     const snrToast = document.getElementById('snrToast');
     const backgroundToggle = document.getElementById('backgroundToggle');
+    const backgroundSelector = document.getElementById('backgroundSelector');
     
     let detectionInterval;
     let faceLogInterval;
-    let backgroundInterval;
     let nativeFaceDetector = null;
     let lastFrame = null;
     let maxFacesInPeriod = 0;
     let virtualBackgroundEnabled = false;
+    let selfieSegmentation = null;
+    let camera = null;
+    let selectedBackground = 'gradient';
 
     // Debug logging
     function addDebug(msg) {
@@ -278,74 +337,208 @@
       console.log(msg);
     }
 
+    // Background selection
+    document.querySelectorAll('.bg-option').forEach(option => {
+      option.addEventListener('click', () => {
+        document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('selected'));
+        option.classList.add('selected');
+        selectedBackground = option.dataset.type;
+        addDebug(`Background changed to: ${selectedBackground}`);
+      });
+    });
+
     // Virtual background toggle
-    backgroundToggle.addEventListener('click', () => {
+    backgroundToggle.addEventListener('click', async () => {
       virtualBackgroundEnabled = !virtualBackgroundEnabled;
       backgroundToggle.classList.toggle('active', virtualBackgroundEnabled);
       
       if (virtualBackgroundEnabled) {
         video.style.display = 'none';
         outputCanvas.style.display = 'block';
-        startBackgroundProcessing();
+        backgroundSelector.style.display = 'flex';
+        await initializeMediaPipe();
         addDebug('✓ Virtual background enabled');
       } else {
         video.style.display = 'block';
         outputCanvas.style.display = 'none';
-        stopBackgroundProcessing();
+        backgroundSelector.style.display = 'none';
+        if (camera) {
+          camera.stop();
+        }
         addDebug('✓ Virtual background disabled');
       }
     });
 
-    // Simple background removal using color-based segmentation
-    function applyVirtualBackground() {
-      if (!video.videoWidth || !video.videoHeight) return;
+    // Initialize MediaPipe Selfie Segmentation
+    async function initializeMediaPipe() {
+      try {
+        addDebug('Initializing MediaPipe...');
+        
+        selfieSegmentation = new SelfieSegmentation({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+          }
+        });
+        
+        selfieSegmentation.setOptions({
+          modelSelection: 1, // 0 for general, 1 for landscape (better quality)
+          selfieMode: true,
+        });
+        
+        selfieSegmentation.onResults(onResults);
+        
+        camera = new Camera(video, {
+          onFrame: async () => {
+            if (virtualBackgroundEnabled) {
+              await selfieSegmentation.send({image: video});
+            }
+          },
+          width: 640,
+          height: 480
+        });
+        
+        await camera.start();
+        addDebug('✓ MediaPipe initialized successfully');
+        
+      } catch (error) {
+        addDebug(`MediaPipe initialization failed: ${error.message}`);
+        // Fallback to simple background removal
+        startSimpleBackgroundProcessing();
+      }
+    }
+
+    // MediaPipe results callback
+    function onResults(results) {
+      if (!virtualBackgroundEnabled) return;
       
       // Set canvas size to match video
       outputCanvas.width = video.videoWidth;
       outputCanvas.height = video.videoHeight;
       
-      // Draw video frame to canvas
-      ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+      // Clear canvas
+      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
       
-      // Get image data
-      const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
-      const data = imageData.data;
+      // Draw background
+      drawBackground();
       
-      // Simple background removal (this is a basic implementation)
-      // In a real app, you'd use more sophisticated segmentation
-      for (let i = 0; i < data.length; i += 4) {
-        const r = data[i];
-        const g = data[i + 1];
-        const b = data[i + 2];
+      // Create mask from segmentation
+      if (results.segmentationMask) {
+        // Create temporary canvas for mask processing
+        const maskCanvas = document.createElement('canvas');
+        const maskCtx = maskCanvas.getContext('2d');
+        maskCanvas.width = outputCanvas.width;
+        maskCanvas.height = outputCanvas.height;
         
-        // Simple heuristic: if pixel is more green/blue than red (common in backgrounds)
-        // and not skin-toned, make it blue background
-        const isBackground = (g > r * 1.2 || b > r * 1.2) && 
-                           !(r > 100 && g > 80 && b > 60 && r > g && r > b);
+        // Draw the segmentation mask
+        maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
         
-        if (isBackground) {
-          // Replace with blue background
-          data[i] = 70;      // R
-          data[i + 1] = 130; // G  
-          data[i + 2] = 200; // B
-          // Alpha stays the same
+        // Draw video frame
+        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+        const frameData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+        
+        // Apply mask - keep person, replace background
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          const maskValue = maskData.data[i]; // Use red channel as mask
+          if (maskValue < 128) { // Background pixel
+            // Make transparent so background shows through
+            frameData.data[i + 3] = 0; // Set alpha to 0
+          }
         }
+        
+        // Draw the masked person on top of background
+        ctx.putImageData(frameData, 0, 0);
+      } else {
+        // Fallback: just draw the video
+        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
       }
+    }
+
+    // Draw different background types
+    function drawBackground() {
+      switch (selectedBackground) {
+        case 'blur':
+          // Draw blurred version of video
+          ctx.filter = 'blur(10px)';
+          ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+          ctx.filter = 'none';
+          break;
+          
+        case 'gradient':
+          // Draw gradient background
+          const gradient = ctx.createLinearGradient(0, 0, outputCanvas.width, outputCanvas.height);
+          gradient.addColorStop(0, '#667eea');
+          gradient.addColorStop(1, '#764ba2');
+          ctx.fillStyle = gradient;
+          ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+          break;
+          
+        case 'solid':
+          // Draw solid color background
+          ctx.fillStyle = '#4CAF50';
+          ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+          break;
+      }
+    }
+
+    // Fallback simple background processing
+    function startSimpleBackgroundProcessing() {
+      const processFrame = () => {
+        if (!virtualBackgroundEnabled) return;
+        
+        // Set canvas size to match video
+        outputCanvas.width = video.videoWidth;
+        outputCanvas.height = video.videoHeight;
+        
+        // Draw background first
+        drawBackground();
+        
+        // Draw video frame
+        ctx.globalCompositeOperation = 'source-over';
+        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+        
+        // Get image data for processing
+        const imageData = ctx.getImageData(0, 0, outputCanvas.width, outputCanvas.height);
+        const data = imageData.data;
+        
+        // Simple background removal (improved version)
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Better heuristic for background detection
+          const brightness = (r + g + b) / 3;
+          const isBackground = (
+            // Green screen detection
+            (g > r * 1.5 && g > b * 1.5) ||
+            // Blue screen detection  
+            (b > r * 1.5 && b > g * 1.2) ||
+            // Very bright or very dark areas (likely background)
+            (brightness > 200 || brightness < 50) ||
+            // Areas with low color variation (likely uniform background)
+            (Math.abs(r - g) < 20 && Math.abs(g - b) < 20 && Math.abs(r - b) < 20 && brightness < 150)
+          ) && 
+          // Exclude skin tones
+          !(r > 95 && g > 40 && b > 20 && r > g && r > b && (r - g) > 15);
+          
+          if (isBackground) {
+            // Make background transparent
+            data[i + 3] = 0;
+          }
+        }
+        
+        // Clear canvas and redraw background
+        ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+        drawBackground();
+        
+        // Draw the masked person
+        ctx.putImageData(imageData, 0, 0);
+        
+        requestAnimationFrame(processFrame);
+      };
       
-      // Put the modified image data back
-      ctx.putImageData(imageData, 0, 0);
-    }
-
-    function startBackgroundProcessing() {
-      if (backgroundInterval) clearInterval(backgroundInterval);
-      backgroundInterval = setInterval(applyVirtualBackground, 33); // ~30 FPS
-    }
-
-    function stopBackgroundProcessing() {
-      if (backgroundInterval) {
-        clearInterval(backgroundInterval);
-        backgroundInterval = null;
-      }
+      processFrame();
     }
 
     function checkBrowserSupport() {
@@ -456,7 +649,7 @@
         maxFacesInPeriod = faceCount;
       }
 
-      if (faceCount > 0) showToast(faceToast);
+      if (faceCount > 1) showToast(faceToast);
 
       const lowLight = isLowLight(video);
       if (lowLight) {
@@ -542,7 +735,7 @@
     window.addEventListener('beforeunload', () => {
       if (detectionInterval) clearInterval(detectionInterval);
       if (faceLogInterval) clearInterval(faceLogInterval);
-      if (backgroundInterval) clearInterval(backgroundInterval);
+      if (camera) camera.stop();
       if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
     });
 
@@ -567,3 +760,4 @@
   </script>
 </body>
 </html>
+
