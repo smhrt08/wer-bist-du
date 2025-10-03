@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v3.001</h3>
+    <h3>v3.002</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -265,11 +265,6 @@
             </div>
           </div>
           
-          <div class="background-selector" id="backgroundSelector" style="display: none;">
-            <div class="bg-option bg-blur" data-type="blur" title="Blur Background"></div>
-            <div class="bg-option bg-gradient selected" data-type="gradient" title="Gradient Background"></div>
-            <div class="bg-option bg-solid" data-type="solid" title="Solid Background"></div>
-          </div>
         </div>
       </div>
     </div>
@@ -327,7 +322,7 @@
     let virtualBackgroundEnabled = false;
     let selfieSegmentation = null;
     let camera = null;
-    let selectedBackground = 'gradient';
+    // let selectedBackground = 'gradient';
 
     // Debug logging
     function addDebug(msg) {
@@ -338,14 +333,14 @@
     }
 
     // Background selection
-    document.querySelectorAll('.bg-option').forEach(option => {
-      option.addEventListener('click', () => {
-        document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('selected'));
-        option.classList.add('selected');
-        selectedBackground = option.dataset.type;
-        addDebug(`Background changed to: ${selectedBackground}`);
-      });
-    });
+    // document.querySelectorAll('.bg-option').forEach(option => {
+    //   option.addEventListener('click', () => {
+    //     document.querySelectorAll('.bg-option').forEach(opt => opt.classList.remove('selected'));
+    //     option.classList.add('selected');
+    //     selectedBackground = option.dataset.type;
+    //     addDebug(`Background changed to: ${selectedBackground}`);
+    //   });
+    // });
 
     // Virtual background toggle
     backgroundToggle.addEventListener('click', async () => {
@@ -355,13 +350,13 @@
       if (virtualBackgroundEnabled) {
         video.style.display = 'none';
         outputCanvas.style.display = 'block';
-        backgroundSelector.style.display = 'flex';
+        // backgroundSelector.style.display = 'flex';
         await initializeMediaPipe();
         addDebug('✓ Virtual background enabled');
       } else {
         video.style.display = 'block';
         outputCanvas.style.display = 'none';
-        backgroundSelector.style.display = 'none';
+        // backgroundSelector.style.display = 'none';
         if (camera) {
           camera.stop();
         }
@@ -456,29 +451,8 @@
 
     // Draw different background types
     function drawBackground() {
-      switch (selectedBackground) {
-        case 'blur':
-          // Draw blurred version of video
-          ctx.filter = 'blur(10px)';
-          ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-          ctx.filter = 'none';
-          break;
-          
-        case 'gradient':
-          // Draw gradient background
-          const gradient = ctx.createLinearGradient(0, 0, outputCanvas.width, outputCanvas.height);
-          gradient.addColorStop(0, '#667eea');
-          gradient.addColorStop(1, '#764ba2');
-          ctx.fillStyle = gradient;
-          ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
-          break;
-          
-        case 'solid':
-          // Draw solid color background
-          ctx.fillStyle = '#4CAF50';
-          ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
-          break;
-      }
+      ctx.fillStyle = '#4169E1'; // Royal blue - change this hex code for different blue shades
+      ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
     }
 
     // Fallback simple background processing
