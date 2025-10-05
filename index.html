@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v4.000</h3>
+    <h3>v4.001</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -478,94 +478,105 @@
       }
     }
 
-    // MediaPipe results callback
-    async function onResults(results) {
-      if (!virtualBackgroundEnabled) return;
+   // MediaPipe results callback
+function onResults(results) {
+  if (!virtualBackgroundEnabled) return;
+  
+  // Set canvas size to match video
+  outputCanvas.width = video.videoWidth;
+  outputCanvas.height = video.videoHeight;
+  
+  // Clear canvas
+  ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+  
+  // Draw blue background first
+  drawBackground();
+  
+  // Check if we have segmentation data
+  if (results.segmentationMask) {
+    // Create temporary canvas for mask processing
+    const maskCanvas = document.createElement('canvas');
+    const maskCtx = maskCanvas.getContext('2d');
+    maskCanvas.width = outputCanvas.width;
+    maskCanvas.height = outputCanvas.height;
+    
+    // Draw the segmentation mask
+    maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    
+    // Draw video frame to a temporary canvas
+    const tempCanvas = document.createElement('canvas');
+    const tempCtx = tempCanvas.getContext('2d');
+    tempCanvas.width = outputCanvas.width;
+    tempCanvas.height = outputCanvas.height;
+    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+    const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+    
+    // Apply mask with ghost mode logic
+    for (let i = 0; i < frameData.data.length; i += 4) {
+      const maskValue = maskData.data[i];
+      const pixelIndex = i / 4;
+      const x = pixelIndex % outputCanvas.width;
+      const y = Math.floor(pixelIndex / outputCanvas.width);
       
-      // Set canvas size to match video
-      outputCanvas.width = video.videoWidth;
-      outputCanvas.height = video.videoHeight;
-      
-      // Clear canvas
-      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-      
-      // Draw blue background first
-      drawBackground();
-      
-      // Detect primary person if ghost mode is enabled
-      if (ghostModeEnabled) {
-        primaryPersonBounds = await detectPrimaryPerson();
-      }
-      
-      // Check if we have segmentation data
-      if (results.segmentationMask) {
-        // Create temporary canvas for mask processing
-        const maskCanvas = document.createElement('canvas');
-        const maskCtx = maskCanvas.getContext('2d');
-        maskCanvas.width = outputCanvas.width;
-        maskCanvas.height = outputCanvas.height;
-        
-        // Draw the segmentation mask
-        maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        
-        // Draw video frame to a temporary canvas
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = outputCanvas.width;
-        tempCanvas.height = outputCanvas.height;
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        
-        // Apply mask with ghost mode logic
-        for (let i = 0; i < frameData.data.length; i += 4) {
-          const maskValue = maskData.data[i];
-          const pixelIndex = i / 4;
-          const x = pixelIndex % outputCanvas.width;
-          const y = Math.floor(pixelIndex / outputCanvas.width);
+      if (maskValue < 128) { 
+        // Background pixel - make transparent
+        frameData.data[i + 3] = 0;
+      } else { 
+        // Person pixel
+        if (ghostModeEnabled && primaryPersonBounds) {
+          // Check if this pixel is within the primary person bounds
+          const isInPrimaryBounds = (
+            x >= primaryPersonBounds.x &&
+            x <= primaryPersonBounds.x + primaryPersonBounds.width &&
+            y >= primaryPersonBounds.y &&
+            y <= primaryPersonBounds.y + primaryPersonBounds.height
+          );
           
-          if (maskValue < 128) { 
-            // Background pixel - make transparent
+          if (isInPrimaryBounds) {
+            // Primary person - make semi-transparent (ghost effect)
+            frameData.data[i + 3] = Math.floor(frameData.data[i + 3] * 0.5);
+          } else {
+            // Secondary person/body part - completely hide
             frameData.data[i + 3] = 0;
-          } else { 
-            // Person pixel
-            if (ghostModeEnabled && primaryPersonBounds) {
-              // Check if this pixel is within the primary person bounds
-              const isInPrimaryBounds = (
-                x >= primaryPersonBounds.x &&
-                x <= primaryPersonBounds.x + primaryPersonBounds.width &&
-                y >= primaryPersonBounds.y &&
-                y <= primaryPersonBounds.y + primaryPersonBounds.height
-              );
-              
-              if (isInPrimaryBounds) {
-                // Primary person - make semi-transparent (ghost effect)
-                frameData.data[i + 3] = frameData.data[i + 3] * 0.5;
-              } else {
-                // Secondary person/body part - completely hide
-                frameData.data[i + 3] = 0;
-              }
-            } else if (ghostModeEnabled) {
-              // No primary person detected, make all people semi-transparent
-              frameData.data[i + 3] = frameData.data[i + 3] * 0.5;
-            }
-            // If ghost mode is off, person pixels remain fully opaque
           }
+        } else if (ghostModeEnabled) {
+          // No primary person bounds or ghost mode without detection - make all people semi-transparent
+          frameData.data[i + 3] = Math.floor(frameData.data[i + 3] * 0.5);
         }
-        
-        // Put the masked person on top of blue background
-        tempCtx.putImageData(frameData, 0, 0);
-        ctx.drawImage(tempCanvas, 0, 0);
-        
-      } else {
-        // Fallback: just draw the video over blue background
-        if (ghostModeEnabled) {
-          ctx.globalAlpha = 0.5;
-        }
-        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-        ctx.globalAlpha = 1.0;
+        // If ghost mode is off, person pixels remain fully opaque (no change needed)
       }
     }
+    
+    // Put the masked person on top of blue background
+    tempCtx.putImageData(frameData, 0, 0);
+    ctx.drawImage(tempCanvas, 0, 0);
+    
+  } else {
+    // Fallback: just draw the video over blue background
+    if (ghostModeEnabled) {
+      ctx.globalAlpha = 0.5;
+    }
+    ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+    ctx.globalAlpha = 1.0;
+  }
+}
+
+    // Continuously detect primary person for ghost mode
+async function updatePrimaryPersonDetection() {
+  if (ghostModeEnabled && virtualBackgroundEnabled) {
+    primaryPersonBounds = await detectPrimaryPerson();
+    if (primaryPersonBounds) {
+      // Only log occasionally to avoid spam
+      if (Math.random() < 0.1) {
+        addDebug(`Primary person detected at: ${Math.round(primaryPersonBounds.x)}, ${Math.round(primaryPersonBounds.y)}`);
+      }
+    }
+  }
+  
+  // Run detection every 500ms
+  setTimeout(updatePrimaryPersonDetection, 500);
+}
 
     // // MediaPipe results callback
     // function onResults(results) {
@@ -875,6 +886,19 @@
       
       addDebug('Video started. Detection active.');
     });
+
+    video.addEventListener('play', () => {
+  if (detectionInterval) clearInterval(detectionInterval);
+  if (faceLogInterval) clearInterval(faceLogInterval);
+  
+  detectionInterval = setInterval(runDetection, 1000);
+  faceLogInterval = setInterval(logMaxFaces, 5000);
+  
+  // Start primary person detection for ghost mode
+  updatePrimaryPersonDetection();
+  
+  addDebug('Video started. Detection active.');
+});
 
     window.addEventListener('beforeunload', () => {
       if (detectionInterval) clearInterval(detectionInterval);
