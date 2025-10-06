@@ -494,38 +494,47 @@
 
     function onSegmentationResults(results) {
       if (!virtualBgEnabled) return;
-
+    
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-
+    
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#1e3a8a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    
       if (!results.segmentationMask) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         return;
       }
-
+      
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = canvas.width;
+      maskCanvas.height = canvas.height;
+      const maskCtx = maskCanvas.getContext('2d');
+  
+      maskCtx.filter = 'blur(5px)'; // Adjust radius for more/less smoothing
+      maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+    
+      const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+    
       const tempCanvas = document.createElement('canvas');
-      const tempCtx = tempCanvas.getContext('2d');
       tempCanvas.width = canvas.width;
       tempCanvas.height = canvas.height;
-
-      tempCtx.drawImage(results.segmentationMask, 0, 0, tempCanvas.width, tempCanvas.height);
-      const maskData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-
-      tempCtx.clearRect(0, 0, tempCanvas.width, tempCanvas.height);
+      const tempCtx = tempCanvas.getContext('2d');
+    
       tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
       const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
 
       if (ghostModeEnabled) {
-        identifyPrimaryPerson(maskData, frameData);
+        identifyPrimaryPerson(maskData, frameData); // existing ghost mode logic
       } else {
-        applyStandardMask(maskData, frameData);
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          const alpha = maskData.data[i] / 255; // convert blurred mask to 0-1
+          frameData.data[i + 3] = frameData.data[i + 3] * alpha;
+        }
       }
-
+    
       tempCtx.putImageData(frameData, 0, 0);
       ctx.drawImage(tempCanvas, 0, 0);
     }
