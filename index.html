@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v4.004</h3>
+    <h3>v4.005</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -329,14 +329,11 @@
     let selfieSegmentation = null;
     let camera = null;
     let ghostModeEnabled = false;
-    let primaryPersonBounds = null;
-    let faceDetectionForGhost = null;
     let baselineSegmentation = null;
     let isCapturingBaseline = false;
     let baselineFrameCount = 0;
-    let baselineFacePosition = null; // Store the face position during baseline capture
     const ghostToggle = document.getElementById('ghostToggle');
-    const BASELINE_FRAMES_NEEDED = 10; // Capture 10 frames to establish baseline
+    const BASELINE_FRAMES_NEEDED = 10;
     
 
     // Debug logging
@@ -375,13 +372,11 @@
       if (ghostModeEnabled) {
         // Reset baseline when enabling ghost mode
         baselineSegmentation = null;
-        baselineFacePosition = null;
         isCapturingBaseline = true;
         baselineFrameCount = 0;
         addDebug('✓ Ghost mode enabled - capturing baseline segmentation...');
       } else {
         baselineSegmentation = null;
-        baselineFacePosition = null;
         isCapturingBaseline = false;
         addDebug('✓ Ghost mode disabled');
       }
@@ -433,10 +428,9 @@
     async function captureBaselineSegmentation(segmentationMask) {
       if (!segmentationMask) return;
       
-      // Detect the primary person's face position during baseline capture
+      // Only capture baseline when exactly one person is detected
       const personDetection = await detectPrimaryPerson();
       if (!personDetection || personDetection.allFaces.length !== 1) {
-        // Only capture baseline when exactly one person is detected
         return;
       }
       
@@ -450,14 +444,8 @@
       const maskData = ctx.getImageData(0, 0, canvas.width, canvas.height);
       
       if (!baselineSegmentation) {
-        // First baseline frame - copy it and store face position
+        // First baseline frame - just copy it
         baselineSegmentation = new Uint8ClampedArray(maskData.data);
-        baselineFacePosition = {
-          x: personDetection.primaryFace.x + personDetection.primaryFace.width / 2,
-          y: personDetection.primaryFace.y + personDetection.primaryFace.height / 2,
-          width: personDetection.primaryFace.width,
-          height: personDetection.primaryFace.height
-        };
         baselineFrameCount = 1;
       } else {
         // Average with previous frames to create a stable baseline
@@ -481,50 +469,32 @@
       return personDetection && personDetection.allFaces.length === 1;
     }
 
-    // Create adaptive segmentation that follows the primary person's movement
-    function createAdaptiveSegmentation(currentSegmentation, currentFacePosition) {
-      if (!baselineSegmentation || !baselineFacePosition || !currentFacePosition) {
+    // Create smart blended segmentation that allows face movement but maintains body bounds
+    function createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation) {
+      if (!baselineSegmentation || !currentSegmentation) {
         return currentSegmentation;
       }
       
-      // Calculate the movement offset
-      const offsetX = currentFacePosition.x - baselineFacePosition.x;
-      const offsetY = currentFacePosition.y - baselineFacePosition.y;
-      
-      // Calculate scale factor based on face size change
-      const scaleX = currentFacePosition.width / baselineFacePosition.width;
-      const scaleY = currentFacePosition.height / baselineFacePosition.height;
-      
-      // Create new segmentation by transforming the baseline
-      const adaptedSegmentation = new Uint8ClampedArray(baselineSegmentation.length);
+      const blendedSegmentation = new Uint8ClampedArray(currentSegmentation.length);
       const width = outputCanvas.width;
       const height = outputCanvas.height;
       
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const currentIndex = (y * width + x) * 4;
-          
-          // Transform coordinates back to baseline position
-          const sourceX = Math.round((x - offsetX) / scaleX + baselineFacePosition.x - baselineFacePosition.x / scaleX);
-          const sourceY = Math.round((y - offsetY) / scaleY + baselineFacePosition.y - baselineFacePosition.y / scaleY);
-          
-          if (sourceX >= 0 && sourceX < width && sourceY >= 0 && sourceY < height) {
-            const sourceIndex = (sourceY * width + sourceX) * 4;
-            adaptedSegmentation[currentIndex] = baselineSegmentation[sourceIndex];
-            adaptedSegmentation[currentIndex + 1] = baselineSegmentation[sourceIndex + 1];
-            adaptedSegmentation[currentIndex + 2] = baselineSegmentation[sourceIndex + 2];
-            adaptedSegmentation[currentIndex + 3] = baselineSegmentation[sourceIndex + 3];
-          } else {
-            // Outside bounds - use background
-            adaptedSegmentation[currentIndex] = 0;
-            adaptedSegmentation[currentIndex + 1] = 0;
-            adaptedSegmentation[currentIndex + 2] = 0;
-            adaptedSegmentation[currentIndex + 3] = 255;
-          }
-        }
+      for (let i = 0; i < currentSegmentation.length; i += 4) {
+        const currentMask = currentSegmentation[i];
+        const baselineMask = baselineSegmentation[i];
+        
+        // Use the maximum of current and baseline segmentation
+        // This allows the person to move (current segmentation) while maintaining
+        // the maximum bounds established in the baseline
+        const blendedMask = Math.max(currentMask, baselineMask * 0.7); // Slightly reduce baseline influence
+        
+        blendedSegmentation[i] = blendedMask;
+        blendedSegmentation[i + 1] = blendedMask;
+        blendedSegmentation[i + 2] = blendedMask;
+        blendedSegmentation[i + 3] = 255;
       }
       
-      return adaptedSegmentation;
+      return blendedSegmentation;
     }
     
     // Initialize MediaPipe Selfie Segmentation
@@ -604,22 +574,16 @@
         // Choose which segmentation to use
         let maskToUse;
         if (ghostModeEnabled && baselineSegmentation && !isCapturingBaseline) {
-          // Get current face position for adaptive segmentation
-          const currentPersonDetection = await detectPrimaryPerson();
-          if (currentPersonDetection) {
-            const currentFacePosition = {
-              x: currentPersonDetection.primaryFace.x + currentPersonDetection.primaryFace.width / 2,
-              y: currentPersonDetection.primaryFace.y + currentPersonDetection.primaryFace.height / 2,
-              width: currentPersonDetection.primaryFace.width,
-              height: currentPersonDetection.primaryFace.height
-            };
-            
-            // Create adaptive segmentation that follows the person's movement
-            maskToUse = createAdaptiveSegmentation(results.segmentationMask, currentFacePosition);
-          } else {
-            // Fallback to baseline if no face detected
-            maskToUse = baselineSegmentation;
-          }
+          // Get current segmentation
+          const maskCanvas = document.createElement('canvas');
+          const maskCtx = maskCanvas.getContext('2d');
+          maskCanvas.width = outputCanvas.width;
+          maskCanvas.height = outputCanvas.height;
+          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+          const currentSegmentation = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+          
+          // Create smart blended segmentation
+          maskToUse = createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation);
         } else {
           // Use current live segmentation
           const maskCanvas = document.createElement('canvas');
@@ -934,3 +898,4 @@
   </script>
 </body>
 </html>
+
