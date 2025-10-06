@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Background Blocker - Professional Video Isolation</title>
+  <title>wer bist du</title>
   <style>
     * {
       margin: 0;
@@ -260,7 +260,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <p>v5.002</p>
+      <p>v5.003</p>
       <button id="startBtn" class="btn-primary" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -513,7 +513,7 @@
       maskCanvas.height = canvas.height;
       const maskCtx = maskCanvas.getContext('2d');
   
-      maskCtx.filter = 'blur(10px)'; // Adjust radius for more/less smoothing
+      maskCtx.filter = 'blur(2px)'; // Adjust radius for more/less smoothing
       maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
     
       const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
