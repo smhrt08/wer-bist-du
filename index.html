@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v4.001</h3>
+    <h3>v4.002</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -429,17 +429,18 @@
         }
       }
       
-      // Expand the bounds to include estimated body area
+      // Create much more generous bounds for the primary person
+      // Include more area above (forehead/hair) and below (shoulders/body)
       const bodyBounds = {
-        x: Math.max(0, primaryFace.x - primaryFace.width * 0.5),
-        y: primaryFace.y,
-        width: Math.min(video.videoWidth, primaryFace.width * 2),
-        height: Math.min(video.videoHeight - primaryFace.y, primaryFace.height * 4)
+        x: Math.max(0, primaryFace.x - primaryFace.width * 1.0), // More width on sides
+        y: Math.max(0, primaryFace.y - primaryFace.height * 0.8), // More space above for forehead/hair
+        width: Math.min(video.videoWidth - Math.max(0, primaryFace.x - primaryFace.width * 1.0), primaryFace.width * 3.0), // Much wider
+        height: Math.min(video.videoHeight - Math.max(0, primaryFace.y - primaryFace.height * 0.8), primaryFace.height * 6.0) // Much taller for full body
       };
       
-      return bodyBounds;
+      return { primaryFace, bodyBounds, allFaces: faces };
     }
-
+    
     // Initialize MediaPipe Selfie Segmentation
     async function initializeMediaPipe() {
       try {
@@ -478,105 +479,104 @@
       }
     }
 
-   // MediaPipe results callback
-function onResults(results) {
-  if (!virtualBackgroundEnabled) return;
-  
-  // Set canvas size to match video
-  outputCanvas.width = video.videoWidth;
-  outputCanvas.height = video.videoHeight;
-  
-  // Clear canvas
-  ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-  
-  // Draw blue background first
-  drawBackground();
-  
-  // Check if we have segmentation data
-  if (results.segmentationMask) {
-    // Create temporary canvas for mask processing
-    const maskCanvas = document.createElement('canvas');
-    const maskCtx = maskCanvas.getContext('2d');
-    maskCanvas.width = outputCanvas.width;
-    maskCanvas.height = outputCanvas.height;
-    
-    // Draw the segmentation mask
-    maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-    const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    
-    // Draw video frame to a temporary canvas
-    const tempCanvas = document.createElement('canvas');
-    const tempCtx = tempCanvas.getContext('2d');
-    tempCanvas.width = outputCanvas.width;
-    tempCanvas.height = outputCanvas.height;
-    tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-    const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-    
-    // Apply mask with ghost mode logic
-    for (let i = 0; i < frameData.data.length; i += 4) {
-      const maskValue = maskData.data[i];
-      const pixelIndex = i / 4;
-      const x = pixelIndex % outputCanvas.width;
-      const y = Math.floor(pixelIndex / outputCanvas.width);
+    // MediaPipe results callback
+    function onResults(results) {
+      if (!virtualBackgroundEnabled) return;
       
-      if (maskValue < 128) { 
-        // Background pixel - make transparent
-        frameData.data[i + 3] = 0;
-      } else { 
-        // Person pixel
-        if (ghostModeEnabled && primaryPersonBounds) {
-          // Check if this pixel is within the primary person bounds
-          const isInPrimaryBounds = (
-            x >= primaryPersonBounds.x &&
-            x <= primaryPersonBounds.x + primaryPersonBounds.width &&
-            y >= primaryPersonBounds.y &&
-            y <= primaryPersonBounds.y + primaryPersonBounds.height
-          );
+      // Set canvas size to match video
+      outputCanvas.width = video.videoWidth;
+      outputCanvas.height = video.videoHeight;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+      
+      // Draw blue background first
+      drawBackground();
+      
+      // Check if we have segmentation data
+      if (results.segmentationMask) {
+        // Create temporary canvas for mask processing
+        const maskCanvas = document.createElement('canvas');
+        const maskCtx = maskCanvas.getContext('2d');
+        maskCanvas.width = outputCanvas.width;
+        maskCanvas.height = outputCanvas.height;
+        
+        // Draw the segmentation mask
+        maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+        
+        // Draw video frame to a temporary canvas
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Apply mask with ghost mode logic
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          const maskValue = maskData.data[i];
+          const pixelIndex = i / 4;
+          const x = pixelIndex % outputCanvas.width;
+          const y = Math.floor(pixelIndex / outputCanvas.width);
           
-          if (isInPrimaryBounds) {
-            // Primary person - make semi-transparent (ghost effect)
-            frameData.data[i + 3] = Math.floor(frameData.data[i + 3] * 0.5);
-          } else {
-            // Secondary person/body part - completely hide
+          if (maskValue < 128) { 
+            // Background pixel - make transparent
             frameData.data[i + 3] = 0;
+          } else { 
+            // Person pixel detected by MediaPipe
+            if (ghostModeEnabled && primaryPersonBounds && primaryPersonBounds.bodyBounds) {
+              // Check if this pixel is within the primary person bounds
+              const bounds = primaryPersonBounds.bodyBounds;
+              const isInPrimaryBounds = (
+                x >= bounds.x &&
+                x <= bounds.x + bounds.width &&
+                y >= bounds.y &&
+                y <= bounds.y + bounds.height
+              );
+              
+              if (isInPrimaryBounds) {
+                // Primary person - keep fully opaque (NO transparency applied)
+                // frameData.data[i + 3] remains unchanged (fully opaque)
+              } else {
+                // Secondary person/body part - completely hide by making transparent
+                frameData.data[i + 3] = 0;
+              }
+            }
+            // If ghost mode is off, all person pixels remain fully opaque
+            // If ghost mode is on but no primary person detected, all person pixels remain opaque
           }
-        } else if (ghostModeEnabled) {
-          // No primary person bounds or ghost mode without detection - make all people semi-transparent
-          frameData.data[i + 3] = Math.floor(frameData.data[i + 3] * 0.5);
         }
-        // If ghost mode is off, person pixels remain fully opaque (no change needed)
+        
+        // Put the masked person on top of blue background
+        tempCtx.putImageData(frameData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
+        
+      } else {
+        // Fallback: just draw the video over blue background
+        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
       }
     }
-    
-    // Put the masked person on top of blue background
-    tempCtx.putImageData(frameData, 0, 0);
-    ctx.drawImage(tempCanvas, 0, 0);
-    
-  } else {
-    // Fallback: just draw the video over blue background
-    if (ghostModeEnabled) {
-      ctx.globalAlpha = 0.5;
-    }
-    ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-    ctx.globalAlpha = 1.0;
-  }
-}
 
     // Continuously detect primary person for ghost mode
-async function updatePrimaryPersonDetection() {
-  if (ghostModeEnabled && virtualBackgroundEnabled) {
-    primaryPersonBounds = await detectPrimaryPerson();
-    if (primaryPersonBounds) {
-      // Only log occasionally to avoid spam
-      if (Math.random() < 0.1) {
-        addDebug(`Primary person detected at: ${Math.round(primaryPersonBounds.x)}, ${Math.round(primaryPersonBounds.y)}`);
+    async function updatePrimaryPersonDetection() {
+      if (ghostModeEnabled && virtualBackgroundEnabled) {
+        const detection = await detectPrimaryPerson();
+        if (detection) {
+          primaryPersonBounds = detection;
+          // Only log occasionally to avoid spam
+          if (Math.random() < 0.05) {
+            const bounds = detection.bodyBounds;
+            addDebug(`Primary person: ${detection.allFaces.length} faces detected, bounds: ${Math.round(bounds.x)},${Math.round(bounds.y)} ${Math.round(bounds.width)}x${Math.round(bounds.height)}`);
+          }
+        } else {
+          primaryPersonBounds = null;
+        }
       }
+      
+      // Run detection every 300ms for more responsive updates
+      setTimeout(updatePrimaryPersonDetection, 300);
     }
-  }
-  
-  // Run detection every 500ms
-  setTimeout(updatePrimaryPersonDetection, 500);
-}
 
     // // MediaPipe results callback
     // function onResults(results) {
