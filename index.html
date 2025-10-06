@@ -247,7 +247,7 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v4.002</h3>
+    <h3>v4.003</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
@@ -331,7 +331,13 @@
     let ghostModeEnabled = false;
     let primaryPersonBounds = null;
     let faceDetectionForGhost = null;
+    let baselineSegmentation = null;
+    let isCapturingBaseline = false;
+    let baselineFrameCount = 0;
     const ghostToggle = document.getElementById('ghostToggle');
+    const BASELINE_FRAMES_NEEDED = 10; // Capture 10 frames to establish baseline
+    
+
 
     // Debug logging
     function addDebug(msg) {
@@ -364,82 +370,140 @@
     });
 
     // Ghost Mode toggle
-    ghostToggle.addEventListener('click', () => {
+    ghostToggle.addEventListener('click', async () => {
       ghostModeEnabled = !ghostModeEnabled;
       ghostToggle.classList.toggle('active', ghostModeEnabled);
       
       if (ghostModeEnabled) {
-        addDebug('✓ Ghost mode enabled - only primary person is visible');
+        // Reset baseline when enabling ghost mode
+        baselineSegmentation = null;
+        isCapturingBaseline = true;
+        baselineFrameCount = 0;
+        addDebug('✓ Ghost mode enabled - capturing baseline segmentation...');
       } else {
+        baselineSegmentation = null;
+        isCapturingBaseline = false;
         addDebug('✓ Ghost mode disabled');
       }
     });
 
-    // Detect primary person (largest/most central face)
-    async function detectPrimaryPerson() {
-      if (!video.videoWidth || !video.videoHeight) return null;
+    // Capture baseline segmentation when only primary person is present
+    function captureBaselineSegmentation(segmentationMask) {
+      if (!segmentationMask) return;
       
-      let faces = [];
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = outputCanvas.width;
+      canvas.height = outputCanvas.height;
       
-      // Try face-api.js first
+      // Draw the segmentation mask
+      ctx.drawImage(segmentationMask, 0, 0, canvas.width, canvas.height);
+      const maskData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      if (!baselineSegmentation) {
+        // First baseline frame - just copy it
+        baselineSegmentation = new Uint8ClampedArray(maskData.data);
+        baselineFrameCount = 1;
+      } else {
+        // Average with previous frames to create a stable baseline
+        for (let i = 0; i < maskData.data.length; i += 4) {
+          const currentMask = maskData.data[i];
+          const avgMask = (baselineSegmentation[i] * baselineFrameCount + currentMask) / (baselineFrameCount + 1);
+          baselineSegmentation[i] = avgMask;
+          baselineSegmentation[i + 1] = avgMask;
+          baselineSegmentation[i + 2] = avgMask;
+          baselineSegmentation[i + 3] = 255;
+        }
+        baselineFrameCount++;
+      }
+    }
+    
+    // Check if we should start capturing baseline (when only one person detected)
+    async function shouldCaptureBaseline() {
+      if (!video.videoWidth || !video.videoHeight) return false;
+      
+      let faceCount = 0;
+      
+      // Quick face detection to see if we have just one person
       if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
         const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        faces = detections.map(detection => ({
-          x: detection.box.x,
-          y: detection.box.y,
-          width: detection.box.width,
-          height: detection.box.height,
-          area: detection.box.width * detection.box.height
-        }));
-      } 
-      // Fallback to native face detector
-      else if (nativeFaceDetector) {
-        const nativeFaces = await nativeFaceDetector.detect(video);
-        faces = nativeFaces.map(face => ({
-          x: face.boundingBox.x,
-          y: face.boundingBox.y,
-          width: face.boundingBox.width,
-          height: face.boundingBox.height,
-          area: face.boundingBox.width * face.boundingBox.height
-        }));
+        faceCount = detections.length;
+      } else if (nativeFaceDetector) {
+        const faces = await nativeFaceDetector.detect(video);
+        faceCount = faces.length;
+      } else {
+        // Fallback - assume one person if we can't detect
+        faceCount = 1;
       }
       
-      if (faces.length === 0) return null;
-      
-      // Find the primary face (largest area, most central)
-      const centerX = video.videoWidth / 2;
-      const centerY = video.videoHeight / 2;
-      
-      let primaryFace = faces[0];
-      let bestScore = 0;
-      
-      for (const face of faces) {
-        const faceCenterX = face.x + face.width / 2;
-        const faceCenterY = face.y + face.height / 2;
-        const distanceFromCenter = Math.sqrt(
-          Math.pow(faceCenterX - centerX, 2) + Math.pow(faceCenterY - centerY, 2)
-        );
-        
-        // Score based on size and centrality (higher is better)
-        const score = face.area / (1 + distanceFromCenter * 0.001);
-        
-        if (score > bestScore) {
-          bestScore = score;
-          primaryFace = face;
-        }
-      }
-      
-      // Create much more generous bounds for the primary person
-      // Include more area above (forehead/hair) and below (shoulders/body)
-      const bodyBounds = {
-        x: Math.max(0, primaryFace.x - primaryFace.width * 1.0), // More width on sides
-        y: Math.max(0, primaryFace.y - primaryFace.height * 0.8), // More space above for forehead/hair
-        width: Math.min(video.videoWidth - Math.max(0, primaryFace.x - primaryFace.width * 1.0), primaryFace.width * 3.0), // Much wider
-        height: Math.min(video.videoHeight - Math.max(0, primaryFace.y - primaryFace.height * 0.8), primaryFace.height * 6.0) // Much taller for full body
-      };
-      
-      return { primaryFace, bodyBounds, allFaces: faces };
+      return faceCount <= 1;
     }
+
+    // // Detect primary person (largest/most central face)
+    // async function detectPrimaryPerson() {
+    //   if (!video.videoWidth || !video.videoHeight) return null;
+      
+    //   let faces = [];
+      
+    //   // Try face-api.js first
+    //   if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+    //     const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+    //     faces = detections.map(detection => ({
+    //       x: detection.box.x,
+    //       y: detection.box.y,
+    //       width: detection.box.width,
+    //       height: detection.box.height,
+    //       area: detection.box.width * detection.box.height
+    //     }));
+    //   } 
+    //   // Fallback to native face detector
+    //   else if (nativeFaceDetector) {
+    //     const nativeFaces = await nativeFaceDetector.detect(video);
+    //     faces = nativeFaces.map(face => ({
+    //       x: face.boundingBox.x,
+    //       y: face.boundingBox.y,
+    //       width: face.boundingBox.width,
+    //       height: face.boundingBox.height,
+    //       area: face.boundingBox.width * face.boundingBox.height
+    //     }));
+    //   }
+      
+    //   if (faces.length === 0) return null;
+      
+    //   // Find the primary face (largest area, most central)
+    //   const centerX = video.videoWidth / 2;
+    //   const centerY = video.videoHeight / 2;
+      
+    //   let primaryFace = faces[0];
+    //   let bestScore = 0;
+      
+    //   for (const face of faces) {
+    //     const faceCenterX = face.x + face.width / 2;
+    //     const faceCenterY = face.y + face.height / 2;
+    //     const distanceFromCenter = Math.sqrt(
+    //       Math.pow(faceCenterX - centerX, 2) + Math.pow(faceCenterY - centerY, 2)
+    //     );
+        
+    //     // Score based on size and centrality (higher is better)
+    //     const score = face.area / (1 + distanceFromCenter * 0.001);
+        
+    //     if (score > bestScore) {
+    //       bestScore = score;
+    //       primaryFace = face;
+    //     }
+    //   }
+      
+    //   // Create much more generous bounds for the primary person
+    //   // Include more area above (forehead/hair) and below (shoulders/body)
+    //   const bodyBounds = {
+    //     x: Math.max(0, primaryFace.x - primaryFace.width * 1.0), // More width on sides
+    //     y: Math.max(0, primaryFace.y - primaryFace.height * 0.8), // More space above for forehead/hair
+    //     width: Math.min(video.videoWidth - Math.max(0, primaryFace.x - primaryFace.width * 1.0), primaryFace.width * 3.0), // Much wider
+    //     height: Math.min(video.videoHeight - Math.max(0, primaryFace.y - primaryFace.height * 0.8), primaryFace.height * 6.0) // Much taller for full body
+    //   };
+      
+    //   return { primaryFace, bodyBounds, allFaces: faces };
+    // }
     
     // Initialize MediaPipe Selfie Segmentation
     async function initializeMediaPipe() {
@@ -480,7 +544,7 @@
     }
 
     // MediaPipe results callback
-    function onResults(results) {
+    async function onResults(results) {
       if (!virtualBackgroundEnabled) return;
       
       // Set canvas size to match video
@@ -495,17 +559,20 @@
       
       // Check if we have segmentation data
       if (results.segmentationMask) {
+        // Handle baseline capture for ghost mode
+        if (ghostModeEnabled && isCapturingBaseline) {
+          const shouldCapture = await shouldCaptureBaseline();
+          if (shouldCapture && baselineFrameCount < BASELINE_FRAMES_NEEDED) {
+            captureBaselineSegmentation(results.segmentationMask);
+            if (baselineFrameCount >= BASELINE_FRAMES_NEEDED) {
+              isCapturingBaseline = false;
+              addDebug('✓ Baseline segmentation captured - ghost mode active');
+            }
+            // During baseline capture, show normal segmentation
+          }
+        }
+        
         // Create temporary canvas for mask processing
-        const maskCanvas = document.createElement('canvas');
-        const maskCtx = maskCanvas.getContext('2d');
-        maskCanvas.width = outputCanvas.width;
-        maskCanvas.height = outputCanvas.height;
-        
-        // Draw the segmentation mask
-        maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-        
-        // Draw video frame to a temporary canvas
         const tempCanvas = document.createElement('canvas');
         const tempCtx = tempCanvas.getContext('2d');
         tempCanvas.width = outputCanvas.width;
@@ -513,39 +580,30 @@
         tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
         const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
         
-        // Apply mask with ghost mode logic
+        // Choose which segmentation to use
+        let maskToUse;
+        if (ghostModeEnabled && baselineSegmentation && !isCapturingBaseline) {
+          // Use frozen baseline segmentation
+          maskToUse = baselineSegmentation;
+        } else {
+          // Use current live segmentation
+          const maskCanvas = document.createElement('canvas');
+          const maskCtx = maskCanvas.getContext('2d');
+          maskCanvas.width = outputCanvas.width;
+          maskCanvas.height = outputCanvas.height;
+          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+          maskToUse = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+        }
+        
+        // Apply the chosen mask
         for (let i = 0; i < frameData.data.length; i += 4) {
-          const maskValue = maskData.data[i];
-          const pixelIndex = i / 4;
-          const x = pixelIndex % outputCanvas.width;
-          const y = Math.floor(pixelIndex / outputCanvas.width);
+          const maskValue = maskToUse[i];
           
           if (maskValue < 128) { 
-            // Background pixel - make transparent
+            // Background pixel - make transparent (blue background shows through)
             frameData.data[i + 3] = 0;
-          } else { 
-            // Person pixel detected by MediaPipe
-            if (ghostModeEnabled && primaryPersonBounds && primaryPersonBounds.bodyBounds) {
-              // Check if this pixel is within the primary person bounds
-              const bounds = primaryPersonBounds.bodyBounds;
-              const isInPrimaryBounds = (
-                x >= bounds.x &&
-                x <= bounds.x + bounds.width &&
-                y >= bounds.y &&
-                y <= bounds.y + bounds.height
-              );
-              
-              if (isInPrimaryBounds) {
-                // Primary person - keep fully opaque (NO transparency applied)
-                // frameData.data[i + 3] remains unchanged (fully opaque)
-              } else {
-                // Secondary person/body part - completely hide by making transparent
-                frameData.data[i + 3] = 0;
-              }
-            }
-            // If ghost mode is off, all person pixels remain fully opaque
-            // If ghost mode is on but no primary person detected, all person pixels remain opaque
           }
+          // Person pixels remain fully opaque - no transparency applied
         }
         
         // Put the masked person on top of blue background
@@ -559,24 +617,24 @@
     }
 
     // Continuously detect primary person for ghost mode
-    async function updatePrimaryPersonDetection() {
-      if (ghostModeEnabled && virtualBackgroundEnabled) {
-        const detection = await detectPrimaryPerson();
-        if (detection) {
-          primaryPersonBounds = detection;
-          // Only log occasionally to avoid spam
-          if (Math.random() < 0.05) {
-            const bounds = detection.bodyBounds;
-            addDebug(`Primary person: ${detection.allFaces.length} faces detected, bounds: ${Math.round(bounds.x)},${Math.round(bounds.y)} ${Math.round(bounds.width)}x${Math.round(bounds.height)}`);
-          }
-        } else {
-          primaryPersonBounds = null;
-        }
-      }
+    // async function updatePrimaryPersonDetection() {
+    //   if (ghostModeEnabled && virtualBackgroundEnabled) {
+    //     const detection = await detectPrimaryPerson();
+    //     if (detection) {
+    //       primaryPersonBounds = detection;
+    //       // Only log occasionally to avoid spam
+    //       if (Math.random() < 0.05) {
+    //         const bounds = detection.bodyBounds;
+    //         addDebug(`Primary person: ${detection.allFaces.length} faces detected, bounds: ${Math.round(bounds.x)},${Math.round(bounds.y)} ${Math.round(bounds.width)}x${Math.round(bounds.height)}`);
+    //       }
+    //     } else {
+    //       primaryPersonBounds = null;
+    //     }
+    //   }
       
-      // Run detection every 300ms for more responsive updates
-      setTimeout(updatePrimaryPersonDetection, 300);
-    }
+    //   // Run detection every 300ms for more responsive updates
+    //   setTimeout(updatePrimaryPersonDetection, 300);
+    // }
 
     // // MediaPipe results callback
     // function onResults(results) {
@@ -895,7 +953,7 @@
   faceLogInterval = setInterval(logMaxFaces, 5000);
   
   // Start primary person detection for ghost mode
-  updatePrimaryPersonDetection();
+  // updatePrimaryPersonDetection();
   
   addDebug('Video started. Detection active.');
 });
