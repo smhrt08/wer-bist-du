@@ -260,7 +260,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <p>v5.003</p>
+      <p>v6.002</p>
       <button id="startBtn" class="btn-primary" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -296,7 +296,7 @@
           <div class="control-row">
             <div class="control-label">
               <span>Ghost Mode</span>
-              <small>Hide background distractions</small>
+              <small>Aggressive background suppression</small>
             </div>
             <div id="ghostToggle" class="toggle disabled">
               <div class="toggle-slider"></div>
@@ -305,7 +305,7 @@
         </div>
 
         <div id="infoBox" class="info-box hidden">
-          <p><strong>Ghost Mode Active:</strong> Only the person closest to the camera is visible. All background people, pets, and movement are hidden.</p>
+          <p><strong>Ghost Mode Active:</strong> Persistent mask tracks primary person. All background movement (pets, people, objects) is aggressively hidden even when connected.</p>
         </div>
       </div>
 
@@ -322,7 +322,7 @@
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script> <!-- option 1 --> 
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
 
   <script>
     const video = document.getElementById('video');
@@ -340,9 +340,21 @@
     let virtualBgEnabled = false;
     let ghostModeEnabled = false;
     let selfieSegmentation = null;
+    let faceDetection = null;
     let camera = null;
-    let faceDetector = null; // option 1
-    let latestFaces = [];    // option 1 
+
+    // Persistent mask system - works at lower resolution for speed
+    const MASK_WIDTH = 320;
+    const MASK_HEIGHT = 180;
+    let persistentMask = null;
+    let previousFrameData = null;
+    let primaryFaceBox = null;
+
+    // Tuning parameters
+    const MASK_STRENGTHEN_RATE = 0.3;  // How fast to strengthen mask in face region
+    const MASK_DECAY_RATE = 0.02;      // How fast mask decays (allows adaptation)
+    const MOTION_THRESHOLD = 15;       // Sensitivity to motion
+    const FACE_REGION_SCALE = 3.5;     // How much to expand face bbox for body
 
     function addDebug(msg) {
       const timestamp = new Date().toLocaleTimeString();
@@ -397,6 +409,7 @@
       addDebug('Initializing MediaPipe Selfie Segmentation...');
 
       try {
+        // Initialize selfie segmentation
         selfieSegmentation = new SelfieSegmentation({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
         });
@@ -408,10 +421,29 @@
 
         selfieSegmentation.onResults(onSegmentationResults);
 
+        // Initialize face detection
+        faceDetection = new FaceDetection({
+          locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
+        });
+
+        faceDetection.setOptions({
+          model: 'short',
+          minDetectionConfidence: 0.5
+        });
+
+        faceDetection.onResults(onFaceResults);
+
+        // Initialize persistent mask
+        persistentMask = new Float32Array(MASK_WIDTH * MASK_HEIGHT);
+
+        // Start camera feed
         camera = new Camera(video, {
           onFrame: async () => {
             if (virtualBgEnabled && selfieSegmentation) {
-              await selfieSegmentation.send({ image: video });
+              await Promise.all([
+                selfieSegmentation.send({ image: video }),
+                faceDetection.send({ image: video })
+              ]);
             }
           },
           width: 1280,
@@ -420,223 +452,224 @@
 
         await camera.start();
         addDebug('✓ MediaPipe initialized successfully');
+        addDebug('✓ Face detection active');
+        addDebug('✓ Persistent mask system ready');
       } catch (err) {
         addDebug(`MediaPipe initialization failed: ${err.message}`);
         showToast('Virtual background unavailable', 'warning');
       }
     }
 
-    /// option 1 implementation functions /// 
-    async function initFaceDetection() {
-      faceDetector = new FaceDetection.FaceDetection({
-        locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`,
-      });
-      faceDetector.setOptions({
-        model: 'short',
-        minDetectionConfidence: 0.6,
-      });
-      faceDetector.onResults(onFaceResults);
-    }
-
     function onFaceResults(results) {
-      latestFaces = results.detections || [];
-    
-      // If multiple faces found, alert user
-      if (latestFaces.length > 1) {
-        showToast(`⚠️ Multiple people detected (${latestFaces.length})`, 'warning');
-      }
-    
-      // Pick primary face (largest or most central)
-      if (latestFaces.length > 0) {
-        const primary = pickPrimaryFace(latestFaces);
-        drawFaceBox(primary);
-      }
-    }
-    
-    function pickPrimaryFace(faces) {
-      const videoW = video.videoWidth;
-      const videoH = video.videoHeight;
-      return faces.reduce((best, f) => {
-        const box = f.boundingBox;
-        const cx = (box.xCenter * videoW);
-        const cy = (box.yCenter * videoH);
-        const dist = Math.abs(cx - videoW/2) + Math.abs(cy - videoH/2);
-        if (!best) return { face: f, dist };
-        return dist < best.dist ? { face: f, dist } : best;
-      }, null).face;
-    }
-    
-    function drawFaceBox(face) {
-      if (!face || !face.boundingBox) return;
-      const { xCenter, yCenter, width, height } = face.boundingBox;
-      const ctx = outputCanvas.getContext('2d');
-      ctx.strokeStyle = '#00bfff';
-      ctx.lineWidth = 2;
-      ctx.strokeRect(
-        (xCenter - width / 2) * outputCanvas.width,
-        (yCenter - height / 2) * outputCanvas.height,
-        width * outputCanvas.width,
-        height * outputCanvas.height
-      );
-    }
-    
-    // Call this once after camera starts:
-    initFaceDetection();
-    
-    // Update on each video frame:
-    async function processFrame() {
-      await selfieSegmentation.send({ image: video });
-      await faceDetector.send({ image: video });
-      requestAnimationFrame(processFrame);
-    }
-
-    /// end option 1 implementation 
-
-    function onSegmentationResults(results) {
-      if (!virtualBgEnabled) return;
-    
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-    
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = '#1e3a8a';
-      ctx.fillRect(0, 0, canvas.width, canvas.height);
-    
-      if (!results.segmentationMask) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      if (!results.detections || results.detections.length === 0) {
+        primaryFaceBox = null;
         return;
       }
-      
-      const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = canvas.width;
-      maskCanvas.height = canvas.height;
-      const maskCtx = maskCanvas.getContext('2d');
-  
-      maskCtx.filter = 'blur(2px)'; // Adjust radius for more/less smoothing
-      maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-    
-      const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-    
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = canvas.width;
-      tempCanvas.height = canvas.height;
-      const tempCtx = tempCanvas.getContext('2d');
-    
-      tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-      const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
 
-      if (ghostModeEnabled) {
-        identifyPrimaryPerson(maskData, frameData); // existing ghost mode logic
-      } else {
-        for (let i = 0; i < frameData.data.length; i += 4) {
-          const alpha = maskData.data[i] / 255; // convert blurred mask to 0-1
-          frameData.data[i + 3] = frameData.data[i + 3] * alpha;
+      // Pick primary face (largest and most central)
+      const videoW = video.videoWidth;
+      const videoH = video.videoHeight;
+      const centerX = videoW / 2;
+      const centerY = videoH / 2;
+
+      let bestFace = null;
+      let bestScore = -1;
+
+      for (const detection of results.detections) {
+        const box = detection.boundingBox;
+        const fx = box.xCenter * videoW;
+        const fy = box.yCenter * videoH;
+        const fw = box.width * videoW;
+        const fh = box.height * videoH;
+
+        const distFromCenter = Math.sqrt(
+          Math.pow(fx - centerX, 2) +
+          Math.pow(fy - centerY, 2)
+        );
+
+        const area = fw * fh;
+        const score = area / (1 + distFromCenter * 0.001);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFace = { x: fx, y: fy, width: fw, height: fh };
         }
       }
-    
-      tempCtx.putImageData(frameData, 0, 0);
-      ctx.drawImage(tempCanvas, 0, 0);
+
+      primaryFaceBox = bestFace;
+
+      // Alert if multiple faces
+      if (results.detections.length > 1 && Math.random() < 0.05) {
+        addDebug(`⚠️ ${results.detections.length} faces detected`);
+      }
     }
 
-    function identifyPrimaryPerson(maskData, frameData) {
-      const width = maskData.width;
-      const height = maskData.height;
-      const centerX = width / 2;
-      const centerY = height / 2;
-
-      const personMask = new Uint8Array(width * height);
-      for (let i = 0; i < maskData.data.length; i += 4) {
-        personMask[i / 4] = maskData.data[i] > 128 ? 1 : 0;
+    function detectMotion(currentFrameData) {
+      if (!previousFrameData) {
+        previousFrameData = new Uint8ClampedArray(currentFrameData);
+        return new Uint8Array(MASK_WIDTH * MASK_HEIGHT);
       }
 
-      const visited = new Uint8Array(width * height);
-      const components = [];
+      const motionMask = new Uint8Array(MASK_WIDTH * MASK_HEIGHT);
 
-      for (let y = 0; y < height; y++) {
-        for (let x = 0; x < width; x++) {
-          const idx = y * width + x;
-          if (personMask[idx] === 1 && visited[idx] === 0) {
-            const component = floodFill(personMask, visited, x, y, width, height);
-            if (component.length > 500) {
-              const sumX = component.reduce((sum, idx) => sum + (idx % width), 0);
-              const sumY = component.reduce((sum, idx) => sum + Math.floor(idx / width), 0);
-              components.push({
-                pixels: component,
-                centerX: sumX / component.length,
-                centerY: sumY / component.length,
-                size: component.length
-              });
+      for (let i = 0; i < currentFrameData.length; i += 4) {
+        const idx = i / 4;
+        const r = Math.abs(currentFrameData[i] - previousFrameData[i]);
+        const g = Math.abs(currentFrameData[i + 1] - previousFrameData[i + 1]);
+        const b = Math.abs(currentFrameData[i + 2] - previousFrameData[i + 2]);
+        const diff = (r + g + b) / 3;
+
+        motionMask[idx] = diff > MOTION_THRESHOLD ? 1 : 0;
+      }
+
+      previousFrameData = new Uint8ClampedArray(currentFrameData);
+      return motionMask;
+    }
+
+    function updatePersistentMask(segmentationMask, motionMask) {
+      // Decay the persistent mask slightly (allows adaptation over time)
+      for (let i = 0; i < persistentMask.length; i++) {
+        persistentMask[i] *= (1 - MASK_DECAY_RATE);
+      }
+
+      // If we have a face, strengthen mask in the face region
+      if (primaryFaceBox) {
+        const scaleX = MASK_WIDTH / video.videoWidth;
+        const scaleY = MASK_HEIGHT / video.videoHeight;
+
+        // Expand face box to include head + upper body
+        const expandedHeight = primaryFaceBox.height * FACE_REGION_SCALE;
+        const expandedWidth = primaryFaceBox.width * 1.8;
+
+        const regionX = Math.max(0, (primaryFaceBox.x - expandedWidth / 2) * scaleX);
+        const regionY = Math.max(0, (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY);
+        const regionW = Math.min(MASK_WIDTH - regionX, expandedWidth * scaleX);
+        const regionH = Math.min(MASK_HEIGHT - regionY, expandedHeight * scaleY);
+
+        // Strengthen mask in face region where segmentation shows person
+        for (let y = Math.floor(regionY); y < Math.floor(regionY + regionH); y++) {
+          for (let x = Math.floor(regionX); x < Math.floor(regionX + regionW); x++) {
+            const idx = y * MASK_WIDTH + x;
+            if (idx >= 0 && idx < persistentMask.length) {
+              // If segmentation says "person" in this region, strengthen
+              if (segmentationMask[idx] > 128) {
+                persistentMask[idx] = Math.min(1.0, persistentMask[idx] + MASK_STRENGTHEN_RATE);
+              }
             }
           }
         }
       }
 
-      if (components.length === 0) {
-        for (let i = 0; i < frameData.data.length; i += 4) {
-          frameData.data[i + 3] = 0;
+      // If motion is detected outside the persistent mask, ensure it stays suppressed
+      for (let i = 0; i < persistentMask.length; i++) {
+        if (motionMask[i] === 1 && persistentMask[i] < 0.3) {
+          // New motion outside primary person - keep it suppressed
+          persistentMask[i] = 0;
         }
+      }
+    }
+
+    function applyPersistentMask(frameData, segmentationMask) {
+      // Create low-res versions
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = MASK_WIDTH;
+      tempCanvas.height = MASK_HEIGHT;
+      const tempCtx = tempCanvas.getContext('2d');
+
+      // Downsample video frame for motion detection
+      tempCtx.drawImage(video, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+      // Downsample segmentation mask
+      tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = segmentationMask.width;
+      maskCanvas.height = segmentationMask.height;
+      const maskCtx = maskCanvas.getContext('2d');
+      maskCtx.putImageData(segmentationMask, 0, 0);
+      tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+      // Detect motion
+      const motionMask = detectMotion(lowResFrame.data);
+
+      // Update persistent mask
+      updatePersistentMask(lowResMask.data, motionMask);
+
+      // Apply persistent mask to full resolution frame
+      const scaleX = frameData.width / MASK_WIDTH;
+      const scaleY = frameData.height / MASK_HEIGHT;
+
+      for (let y = 0; y < frameData.height; y++) {
+        for (let x = 0; x < frameData.width; x++) {
+          const fullIdx = (y * frameData.width + x) * 4;
+
+          // Map to low-res persistent mask
+          const lowX = Math.floor(x / scaleX);
+          const lowY = Math.floor(y / scaleY);
+          const lowIdx = lowY * MASK_WIDTH + lowX;
+
+          // Apply persistent mask with feathering
+          const maskValue = persistentMask[lowIdx];
+
+          if (maskValue < 0.1) {
+            // Strong suppression - make transparent
+            frameData.data[fullIdx + 3] = 0;
+          } else if (maskValue < 0.5) {
+            // Partial suppression - fade out
+            frameData.data[fullIdx + 3] *= maskValue;
+          }
+          // else: maskValue >= 0.5, keep fully visible
+        }
+      }
+    }
+
+    function onSegmentationResults(results) {
+      if (!virtualBgEnabled) return;
+
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      ctx.fillStyle = '#1e3a8a';
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+      if (!results.segmentationMask) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         return;
       }
 
-      let primaryComponent = components[0];
-      let bestScore = 0;
+      // Get segmentation mask
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = canvas.width;
+      maskCanvas.height = canvas.height;
+      const maskCtx = maskCanvas.getContext('2d');
+      maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+      const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
 
-      for (const comp of components) {
-        const distFromCenter = Math.sqrt(
-          Math.pow(comp.centerX - centerX, 2) +
-          Math.pow(comp.centerY - centerY, 2)
-        );
-        const score = comp.size / (1 + distFromCenter * 0.01);
-        if (score > bestScore) {
-          bestScore = score;
-          primaryComponent = comp;
+      // Get video frame
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = canvas.width;
+      tempCanvas.height = canvas.height;
+      const tempCtx = tempCanvas.getContext('2d');
+      tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+      const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+      if (ghostModeEnabled) {
+        // Use persistent mask system
+        applyPersistentMask(frameData, maskData);
+      } else {
+        // Standard mode - just apply segmentation
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          if (maskData.data[i] < 128) {
+            frameData.data[i + 3] = 0;
+          }
         }
       }
 
-      const primaryMask = new Uint8Array(width * height);
-      for (const idx of primaryComponent.pixels) {
-        primaryMask[idx] = 1;
-      }
-
-      for (let i = 0; i < frameData.data.length; i += 4) {
-        if (primaryMask[i / 4] === 0) {
-          frameData.data[i + 3] = 0;
-        }
-      }
-
-      if (components.length > 1 && Math.random() < 0.1) {
-        addDebug(`Ghost Mode: ${components.length} people detected, showing primary only`);
-        showToast(`${components.length} people detected - hiding distractions`, 'warning');
-      }
-    }
-
-    function floodFill(mask, visited, startX, startY, width, height) {
-      const component = [];
-      const stack = [[startX, startY]];
-
-      while (stack.length > 0) {
-        const [x, y] = stack.pop();
-        const idx = y * width + x;
-
-        if (x < 0 || x >= width || y < 0 || y >= height) continue;
-        if (visited[idx] === 1 || mask[idx] === 0) continue;
-
-        visited[idx] = 1;
-        component.push(idx);
-
-        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
-      }
-
-      return component;
-    }
-
-    function applyStandardMask(maskData, frameData) {
-      for (let i = 0; i < frameData.data.length; i += 4) {
-        if (maskData.data[i] < 128) {
-          frameData.data[i + 3] = 0;
-        }
-      }
+      tempCtx.putImageData(frameData, 0, 0);
+      ctx.drawImage(tempCanvas, 0, 0);
     }
 
     async function toggleVirtualBackground() {
@@ -672,9 +705,15 @@
       ghostToggle.classList.toggle('active', ghostModeEnabled);
       infoBox.classList.toggle('hidden', !ghostModeEnabled);
 
-      addDebug(ghostModeEnabled
-        ? 'Ghost mode enabled - only primary person visible'
-        : 'Ghost mode disabled');
+      if (ghostModeEnabled) {
+        // Reset persistent mask
+        persistentMask.fill(0);
+        previousFrameData = null;
+        addDebug('Ghost mode enabled - persistent mask active');
+        addDebug('Tracking primary person with face-anchored mask');
+      } else {
+        addDebug('Ghost mode disabled');
+      }
     }
 
     startBtn.addEventListener('click', startCamera);
