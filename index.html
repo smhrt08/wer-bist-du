@@ -5,28 +5,29 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>wer bist du</title>
   <style>
-    body { 
-      display: flex; 
-      flex-direction: column; 
-      font-family: sans-serif; 
-      margin: 0;
-      padding: 20px;
-      height: 100vh;
-      box-sizing: border-box;
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: system-ui, sans-serif;
+      background: #f1f5f9;
+      padding: 2rem;
     }
-    
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
     .header {
       text-align: center;
-      margin-bottom: 20px;
+      margin-bottom: 2rem;
     }
-    
     .header h1 {
-      margin: 0 0 5px 0;
-    }
-    
+      font-size: 2rem;
+      font-weight: 700;
+      color: #1e293b;
+    }    
     .header h3 {
       margin: 0 0 15px 0;
     }
+    .header p { color: #64748b; margin-bottom: 1rem; }
     
     .main-container {
       display: flex;
@@ -49,20 +50,27 @@
       flex-direction: column;
     }
     
+    .video-row {
+      display: flex;
+      gap: 1.5rem;
+    }
+    .card {
+      flex: 1;
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      padding: 1rem;
+    }
     .video-container {
       position: relative;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 10px;
+      background: #0f172a;
+      border-radius: 0.75rem;
+      overflow: hidden;
+      aspect-ratio: 16/9;
     }
-    
-    video, canvas { 
-      border: 2px solid #333; 
-      border-radius: 12px; 
-      max-width: 100%;
-      max-height: 70vh;
-      height: auto;
+    video, canvas {
+      width: 100%;
+      height: 100%;
       object-fit: contain;
     }
     
@@ -71,51 +79,33 @@
     }
     
     .controls {
+      margin-top: 1rem;
       display: flex;
-      flex-direction: column;
-      gap: 10px;
-      align-items: center;
+      gap: 1rem;
+      justify-content: space-between;
     }
     
-    .toggle-container {
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
-    
-    .toggle-switch {
+    .toggle {
       position: relative;
-      width: 50px;
-      height: 24px;
-      background-color: #ccc;
-      border-radius: 12px;
+      width: 3rem;
+      height: 1.5rem;
+      background: #cbd5e1;
+      border-radius: 1rem;
       cursor: pointer;
-      transition: background-color 0.3s;
+      transition: background 0.3s;
     }
-    
-    .toggle-switch.active {
-      background-color: #007bff;
-    }
-    
+    .toggle.active { background: #2563eb; }
     .toggle-slider {
       position: absolute;
-      top: 2px;
-      left: 2px;
-      width: 20px;
-      height: 20px;
-      background-color: white;
+      top: 0.2rem;
+      left: 0.2rem;
+      width: 1.1rem;
+      height: 1.1rem;
+      background: white;
       border-radius: 50%;
       transition: transform 0.3s;
     }
-    
-    .toggle-switch.active .toggle-slider {
-      transform: translateX(26px);
-    }
-    
-    .toggle-label {
-      font-size: 14px;
-      color: #333;
-    }
+    .toggle.active .toggle-slider { transform: translateX(1.4rem); }
     
     .background-selector {
       display: flex;
@@ -153,17 +143,28 @@
       background: #4CAF50;
     }
     
-    #debug {
-      flex: 1;
-      padding: 15px;
-      border-radius: 8px;
-      background-color: #e8f4f8;
-      font-family: monospace;
-      font-size: 12px;
-      word-break: break-all;
+    .debug-panel {
+      background: white;
+      border-radius: 1rem;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
+      padding: 1rem;
+      margin-top: 1.5rem;
+    }
+    .debug-panel h2 {
+      color: #1e293b;
+      font-size: 1.2rem;
+      margin-bottom: 0.5rem;
+    }
+    .debug-log {
+      height: 18rem;
       overflow-y: auto;
-      border: 1px solid #ccc;
-      min-height: 400px;
+      background: #f8fafc;
+      border: 1px solid #e2e8f0;
+      border-radius: 0.5rem;
+      padding: 0.5rem;
+      font-family: monospace;
+      font-size: 0.8rem;
+      color: #334155;
     }
     
     button {
