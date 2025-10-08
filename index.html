@@ -249,7 +249,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.006</h3>
+      <h3>v4.007</h3>
       <button id="startBtn">Start Camera</button>
     </div>
   
@@ -368,7 +368,50 @@
     let baselineFrameCount = 0;
     const ghostToggle = document.getElementById('ghostToggle');
     const BASELINE_FRAMES_NEEDED = 10;
-    
+
+    async function startCamera() {
+      try {
+        startBtn.disabled = true;
+        log('Requesting camera...');
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720 },
+          audio: false
+        });
+        videoLeft.srcObject = stream;
+        videoRight.srcObject = stream;
+        log('✓ Camera started on both feeds.');
+        await initMediaPipe();
+      } catch (err) {
+        log('Camera error: ' + err.message);
+      }
+    }
+
+    async function initMediaPipe() {
+      selfieSegmentation = new SelfieSegmentation({
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
+      });
+      selfieSegmentation.setOptions({ modelSelection: 1 });
+
+      faceDetector = new FaceDetection.FaceDetection({
+        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
+      });
+      faceDetector.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
+
+      const camera = new Camera(videoLeft, {
+        onFrame: async () => {
+          await faceDetector.send({ image: videoLeft });
+          if (virtualBgEnabled)
+            await selfieSegmentation.send({ image: videoRight });
+        },
+        width: 1280,
+        height: 720
+      });
+
+      faceDetector.onResults(onFaceResults);
+      selfieSegmentation.onResults(onSegmentationResults);
+      await camera.start();
+      log('MediaPipe initialized.');
+    }
 
     // Debug logging
     function addDebug(msg) {
