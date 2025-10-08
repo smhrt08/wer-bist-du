@@ -260,7 +260,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <p>v6.004</p>
+      <p>v6.005</p>
       <button id="startBtn" class="btn-primary" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -407,49 +407,62 @@
 
     async function initializeMediaPipe() {
       addDebug('Initializing MediaPipe Selfie Segmentation...');
-
+    
       try {
         // Initialize selfie segmentation
         selfieSegmentation = new SelfieSegmentation({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`
         });
-
+    
         selfieSegmentation.setOptions({
           modelSelection: 1,
           selfieMode: false,
         });
-
+    
         selfieSegmentation.onResults(onSegmentationResults);
-
+    
         // Initialize face detection
         faceDetection = new FaceDetection({
           locateFile: (file) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${file}`
         });
-
+    
         faceDetection.setOptions({
           model: 'short',
           minDetectionConfidence: 0.5
         });
-
+    
         faceDetection.onResults(onFaceResults);
-
+    
         // Initialize persistent mask
         persistentMask = new Float32Array(MASK_WIDTH * MASK_HEIGHT);
-
+    
         // Start camera feed
         camera = new Camera(video, {
           onFrame: async () => {
-            if (virtualBgEnabled && selfieSegmentation) {
-              await Promise.all([
-                selfieSegmentation.send({ image: video }),
-                faceDetection.send({ image: video })
-              ]);
+            if (virtualBgEnabled) {
+              if (ghostModeEnabled && selfieSegmentation) {
+                // Ghost mode - use MediaPipe
+                await Promise.all([
+                  selfieSegmentation.send({ image: video }),
+                  faceDetection.send({ image: video })
+                ]);
+              } else {
+                // Virtual background without ghost mode - just draw video with background
+                const ctx = canvas.getContext('2d');
+                canvas.width = video.videoWidth;
+                canvas.height = video.videoHeight;
+                
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+                ctx.fillStyle = '#1e3a8a';
+                ctx.fillRect(0, 0, canvas.width, canvas.height);
+                ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+              }
             }
           },
           width: 1280,
           height: 720
         });
-
+    
         await camera.start();
         addDebug('✓ MediaPipe initialized successfully');
         addDebug('✓ Face detection active');
@@ -625,7 +638,7 @@
     }
 
     function onSegmentationResults(results) {
-      if (!virtualBgEnabled) return;
+      if (!virtualBgEnabled || !ghostModeEnabled) return;
     
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
@@ -635,13 +648,6 @@
       ctx.fillStyle = '#1e3a8a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
     
-      // If ghost mode is NOT enabled, just draw the video directly
-      if (!ghostModeEnabled) {
-        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-        return;
-      }
-    
-      // Ghost mode is enabled - apply masking
       if (!results.segmentationMask) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         return;
