@@ -2,287 +2,899 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>wer bist du</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body {
-      font-family: system-ui, sans-serif;
-      background: #f1f5f9;
-      padding: 2rem;
+    body { 
+      display: flex; 
+      flex-direction: column; 
+      font-family: sans-serif; 
+      margin: 0;
+      padding: 20px;
+      height: 100vh;
+      box-sizing: border-box;
     }
-    .container {
-      max-width: 1400px;
-      margin: 0 auto;
-    }
+    
     .header {
       text-align: center;
-      margin-bottom: 2rem;
+      margin-bottom: 20px;
     }
+    
     .header h1 {
-      font-size: 2rem;
-      font-weight: 700;
-      color: #1e293b;
+      margin: 0 0 5px 0;
     }
-    .header p { color: #64748b; margin-bottom: 1rem; }
-
-    .btn-primary {
-      background: #2563eb;
-      color: white;
-      border: none;
-      border-radius: 0.5rem;
-      padding: 0.75rem 1.5rem;
-      font-weight: 500;
-      cursor: pointer;
+    
+    .header h3 {
+      margin: 0 0 15px 0;
     }
-    .btn-primary:disabled { background: #cbd5e1; cursor: not-allowed; }
-
-    .video-row {
+    
+    .main-container {
       display: flex;
-      gap: 1.5rem;
-    }
-    .card {
       flex: 1;
-      background: white;
-      border-radius: 1rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-      padding: 1rem;
+      gap: 20px;
+      min-height: 0;
     }
+    
+    .left-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 15px;
+    }
+    
+    .right-panel {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+    }
+    
     .video-container {
       position: relative;
-      background: #0f172a;
-      border-radius: 0.75rem;
-      overflow: hidden;
-      aspect-ratio: 16/9;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      gap: 10px;
     }
-    video, canvas {
-      width: 100%;
-      height: 100%;
+    
+    video, canvas { 
+      border: 2px solid #333; 
+      border-radius: 12px; 
+      max-width: 100%;
+      max-height: 70vh;
+      height: auto;
       object-fit: contain;
     }
-
+    
+    #outputCanvas {
+      display: none;
+    }
+    
     .controls {
-      margin-top: 1rem;
       display: flex;
-      gap: 1rem;
-      justify-content: space-between;
+      flex-direction: column;
+      gap: 10px;
+      align-items: center;
     }
-    .toggle {
+    
+    .toggle-container {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .toggle-switch {
       position: relative;
-      width: 3rem;
-      height: 1.5rem;
-      background: #cbd5e1;
-      border-radius: 1rem;
+      width: 50px;
+      height: 24px;
+      background-color: #ccc;
+      border-radius: 12px;
       cursor: pointer;
-      transition: background 0.3s;
+      transition: background-color 0.3s;
     }
-    .toggle.active { background: #2563eb; }
+    
+    .toggle-switch.active {
+      background-color: #007bff;
+    }
+    
     .toggle-slider {
       position: absolute;
-      top: 0.2rem;
-      left: 0.2rem;
-      width: 1.1rem;
-      height: 1.1rem;
-      background: white;
+      top: 2px;
+      left: 2px;
+      width: 20px;
+      height: 20px;
+      background-color: white;
       border-radius: 50%;
       transition: transform 0.3s;
     }
-    .toggle.active .toggle-slider { transform: translateX(1.4rem); }
-
-    .debug-panel {
-      background: white;
-      border-radius: 1rem;
-      box-shadow: 0 4px 10px rgba(0,0,0,0.08);
-      padding: 1rem;
-      margin-top: 1.5rem;
+    
+    .toggle-switch.active .toggle-slider {
+      transform: translateX(26px);
     }
-    .debug-panel h2 {
-      color: #1e293b;
-      font-size: 1.2rem;
-      margin-bottom: 0.5rem;
+    
+    .toggle-label {
+      font-size: 14px;
+      color: #333;
     }
-    .debug-log {
-      height: 18rem;
-      overflow-y: auto;
-      background: #f8fafc;
-      border: 1px solid #e2e8f0;
-      border-radius: 0.5rem;
-      padding: 0.5rem;
+    
+    .background-selector {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    
+    .bg-option {
+      width: 60px;
+      height: 40px;
+      border: 2px solid #ccc;
+      border-radius: 4px;
+      cursor: pointer;
+      transition: border-color 0.3s;
+    }
+    
+    .bg-option.selected {
+      border-color: #007bff;
+    }
+    
+    .bg-blur {
+      background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
+                  linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
+                  linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
+                  linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
+      background-size: 8px 8px;
+      background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
+    }
+    
+    .bg-gradient {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    }
+    
+    .bg-solid {
+      background: #4CAF50;
+    }
+    
+    #debug {
+      flex: 1;
+      padding: 15px;
+      border-radius: 8px;
+      background-color: #e8f4f8;
       font-family: monospace;
-      font-size: 0.8rem;
-      color: #334155;
+      font-size: 12px;
+      word-break: break-all;
+      overflow-y: auto;
+      border: 1px solid #ccc;
+      min-height: 400px;
+    }
+    
+    button {
+      padding: 12px 24px;
+      font-size: 16px;
+      border: none;
+      border-radius: 8px;
+      background-color: #007bff;
+      color: white;
+      cursor: pointer;
+      transition: background-color 0.3s;
+    }
+    
+    button:hover {
+      background-color: #0056b3;
+    }
+    
+    button:disabled {
+      background-color: #ccc;
+      cursor: not-allowed;
+    }
+    
+    .toast {
+      visibility: hidden;
+      display: flex;
+      width: 348px;
+      height: 44px;
+      min-height: 44px;
+      flex-direction: row;
+      align-items: center;
+      gap: 8px;
+      flex-shrink: 0;
+      border-radius: 8px;
+      border: 1px solid #F0775C;
+      background: #F9F9F9;
+      box-shadow: 0 0 8px 0 rgba(22, 51, 95, 0.10);
+      color: #333;
+      text-align: left;
+      padding: 12px 16px;
+      position: fixed;
+      bottom: 30px;
+      left: 50%;
+      transform: translateX(-50%);
+      z-index: 1;
+      transition: visibility 0.5s, opacity 0.5s;
+      opacity: 0;
+      box-sizing: border-box;
+    }
+    
+    .toast.show {
+      visibility: visible;
+      opacity: 1;
+    }
+    
+    #faceToast { 
+      border-color: #F0775C;
+    }
+    #lowLightToast { 
+      border-color: #FFA500;
+    }
+    #snrToast { 
+      border-color: #6a0dad;
+    }
+    
+    /* Responsive design for smaller screens */
+    @media (max-width: 768px) {
+      .main-container {
+        flex-direction: column;
+      }
+      
+      .right-panel {
+        min-height: 300px;
+      }
+      
+      video, canvas {
+        max-height: 50vh;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="container">
-    <div class="header">
-      <h1>wer bist du</h1>
-      <p>v6.000</p>
-      <button id="startBtn" class="btn-primary">Start Camera</button>
-    </div>
-
-    <div class="video-row">
-      <!-- Left: Face Detection -->
-      <div class="card">
-        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Face Detection View</h3>
-        <div class="video-container">
-          <video id="videoLeft" autoplay muted playsinline></video>
-          <canvas id="canvasFaces"></canvas>
-        </div>
-      </div>
-
-      <!-- Right: Background Isolation -->
-      <div class="card">
-        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Background Isolation View</h3>
-        <div class="video-container">
-          <video id="videoRight" autoplay muted playsinline></video>
-          <canvas id="canvasBG" class="hidden"></canvas>
-        </div>
+  <div class="header">
+    <h1>wer bist du</h1>
+    <h3>v4.005</h3>
+    <button id="startBtn" disabled>Start Camera</button>
+  </div>
+  
+  <div class="main-container">
+    <div class="left-panel">
+      <div class="video-container">
+        <video id="video" width="640" height="480" autoplay muted playsinline></video>
+        <canvas id="outputCanvas" width="640" height="480"></canvas>
+        
         <div class="controls">
-          <div id="bgToggle" class="toggle"><div class="toggle-slider"></div></div>
-          <div id="ghostToggle" class="toggle"><div class="toggle-slider"></div></div>
+          <div class="toggle-container">
+            <span class="toggle-label">Virtual Background</span>
+            <div class="toggle-switch" id="backgroundToggle">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
+          
+          <div class="toggle-container">
+            <span class="toggle-label">Ghost Mode</span>
+            <div class="toggle-switch" id="ghostToggle">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
-
-    <!-- Debug below -->
-    <div class="debug-panel">
-      <h2>Debug Log</h2>
-      <div id="debugLog" class="debug-log"></div>
+    
+    <div class="right-panel">
+      <div id="debug" height="480"></div>
     </div>
   </div>
 
+  <div id="faceToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#D42802" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Another person detected in the background!
+  </div>
+  <div id="lowLightToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#FFA500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Low lighting detected!
+  </div>
+  <div id="snrToast" class="toast">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    Background noise too high (low SNR)!
+  </div>
+
+  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection"></script>
+  
+  <!-- Face API CDN -->
+  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
 
   <script>
+    const video = document.getElementById('video');
+    const outputCanvas = document.getElementById('outputCanvas');
+    const ctx = outputCanvas.getContext('2d');
     const startBtn = document.getElementById('startBtn');
-    const videoLeft = document.getElementById('videoLeft');
-    const videoRight = document.getElementById('videoRight');
-    const canvasFaces = document.getElementById('canvasFaces');
-    const canvasBG = document.getElementById('canvasBG');
-    const bgToggle = document.getElementById('bgToggle');
-    const ghostToggle = document.getElementById('ghostToggle');
-    const debugLog = document.getElementById('debugLog');
-
-    let stream = null;
-    let virtualBgEnabled = false;
-    let ghostModeEnabled = false;
+    const debug = document.getElementById('debug');
+    const faceToast = document.getElementById('faceToast');
+    const lowLightToast = document.getElementById('lowLightToast');
+    const snrToast = document.getElementById('snrToast');
+    const backgroundToggle = document.getElementById('backgroundToggle');
+    const backgroundSelector = document.getElementById('backgroundSelector');
+    
+    let detectionInterval;
+    let faceLogInterval;
+    let nativeFaceDetector = null;
+    let lastFrame = null;
+    let maxFacesInPeriod = 0;
+    let virtualBackgroundEnabled = false;
     let selfieSegmentation = null;
-    let faceDetector = null;
+    let camera = null;
+    let ghostModeEnabled = false;
+    let baselineSegmentation = null;
+    let isCapturingBaseline = false;
+    let baselineFrameCount = 0;
+    const ghostToggle = document.getElementById('ghostToggle');
+    const BASELINE_FRAMES_NEEDED = 10;
+    
 
-    function log(msg) {
-      const t = new Date().toLocaleTimeString();
-      debugLog.innerHTML += `[${t}] ${msg}<br>`;
-      debugLog.scrollTop = debugLog.scrollHeight;
+    // Debug logging
+    function addDebug(msg) {
+      const timestamp = new Date().toLocaleTimeString();
+      debug.innerHTML += `[${timestamp}] ${msg}<br>`;
+      debug.scrollTop = debug.scrollHeight;
+      console.log(msg);
     }
 
-    async function startCamera() {
-      try {
-        startBtn.disabled = true;
-        log('Requesting camera...');
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: false
-        });
-        videoLeft.srcObject = stream;
-        videoRight.srcObject = stream;
-        log('✓ Camera started on both feeds.');
-        await initMediaPipe();
-      } catch (err) {
-        log('Camera error: ' + err.message);
-      }
-    }
-
-    async function initMediaPipe() {
-      selfieSegmentation = new SelfieSegmentation({
-        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
-      });
-      selfieSegmentation.setOptions({ modelSelection: 1 });
-
-      faceDetector = new FaceDetection.FaceDetection({
-        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
-      });
-      faceDetector.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
-
-      const camera = new Camera(videoLeft, {
-        onFrame: async () => {
-          await faceDetector.send({ image: videoLeft });
-          if (virtualBgEnabled)
-            await selfieSegmentation.send({ image: videoRight });
-        },
-        width: 1280,
-        height: 720
-      });
-
-      faceDetector.onResults(onFaceResults);
-      selfieSegmentation.onResults(onSegmentationResults);
-      await camera.start();
-      log('MediaPipe initialized.');
-    }
-
-    function onFaceResults(results) {
-      const ctx = canvasFaces.getContext('2d');
-      ctx.clearRect(0, 0, canvasFaces.width, canvasFaces.height);
-      canvasFaces.width = videoLeft.videoWidth;
-      canvasFaces.height = videoLeft.videoHeight;
-      ctx.drawImage(videoLeft, 0, 0, canvasFaces.width, canvasFaces.height);
-      if (!results.detections) return;
-      results.detections.forEach(det => {
-        const box = det.boundingBox;
-        ctx.strokeStyle = '#00bfff';
-        ctx.lineWidth = 3;
-        ctx.strokeRect(
-          box.xCenter * canvasFaces.width - (box.width * canvasFaces.width) / 2,
-          box.yCenter * canvasFaces.height - (box.height * canvasFaces.height) / 2,
-          box.width * canvasFaces.width,
-          box.height * canvasFaces.height
-        );
-      });
-    }
-
-    function onSegmentationResults(results) {
-      const ctx = canvasBG.getContext('2d');
-      canvasBG.width = videoRight.videoWidth;
-      canvasBG.height = videoRight.videoHeight;
-
-      ctx.clearRect(0, 0, canvasBG.width, canvasBG.height);
-      ctx.fillStyle = '#1e3a8a';
-      ctx.fillRect(0, 0, canvasBG.width, canvasBG.height);
-
-      if (!results.segmentationMask) return;
-      const mask = results.segmentationMask;
-      ctx.save();
-      ctx.drawImage(mask, 0, 0, canvasBG.width, canvasBG.height);
-      ctx.globalCompositeOperation = 'source-in';
-      ctx.drawImage(videoRight, 0, 0, canvasBG.width, canvasBG.height);
-      ctx.restore();
-    }
-
-    bgToggle.onclick = async () => {
-      virtualBgEnabled = !virtualBgEnabled;
-      bgToggle.classList.toggle('active', virtualBgEnabled);
-      if (virtualBgEnabled) {
-        canvasBG.classList.remove('hidden');
-        videoRight.classList.add('hidden');
-        log('Virtual background enabled.');
+    // Virtual background toggle
+    backgroundToggle.addEventListener('click', async () => {
+      virtualBackgroundEnabled = !virtualBackgroundEnabled;
+      backgroundToggle.classList.toggle('active', virtualBackgroundEnabled);
+      
+      if (virtualBackgroundEnabled) {
+        video.style.display = 'none';
+        outputCanvas.style.display = 'block';
+        await initializeMediaPipe();
+        addDebug('✓ Virtual background enabled');
       } else {
-        canvasBG.classList.add('hidden');
-        videoRight.classList.remove('hidden');
-        log('Virtual background disabled.');
+        video.style.display = 'block';
+        outputCanvas.style.display = 'none';
+        if (camera) {
+          camera.stop();
+        }
+        addDebug('✓ Virtual background disabled');
       }
-    };
+    });
 
-    ghostToggle.onclick = () => {
+    // Ghost Mode toggle
+    ghostToggle.addEventListener('click', async () => {
       ghostModeEnabled = !ghostModeEnabled;
       ghostToggle.classList.toggle('active', ghostModeEnabled);
-      log(ghostModeEnabled ? 'Ghost mode enabled.' : 'Ghost mode disabled.');
-    };
+      
+      if (ghostModeEnabled) {
+        // Reset baseline when enabling ghost mode
+        baselineSegmentation = null;
+        isCapturingBaseline = true;
+        baselineFrameCount = 0;
+        addDebug('✓ Ghost mode enabled - capturing baseline segmentation...');
+      } else {
+        baselineSegmentation = null;
+        isCapturingBaseline = false;
+        addDebug('✓ Ghost mode disabled');
+      }
+    });
 
-    startBtn.onclick = startCamera;
+    // Detect primary person (largest face)
+    async function detectPrimaryPerson() {
+      if (!video.videoWidth || !video.videoHeight) return null;
+      
+      let faces = [];
+      
+      // Try face-api.js first
+      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        faces = detections.map(detection => ({
+          x: detection.box.x,
+          y: detection.box.y,
+          width: detection.box.width,
+          height: detection.box.height,
+          area: detection.box.width * detection.box.height
+        }));
+      } 
+      // Fallback to native face detector
+      else if (nativeFaceDetector) {
+        const nativeFaces = await nativeFaceDetector.detect(video);
+        faces = nativeFaces.map(face => ({
+          x: face.boundingBox.x,
+          y: face.boundingBox.y,
+          width: face.boundingBox.width,
+          height: face.boundingBox.height,
+          area: face.boundingBox.width * face.boundingBox.height
+        }));
+      }
+      
+      if (faces.length === 0) return null;
+      
+      // Find the largest face (primary person)
+      let primaryFace = faces[0];
+      for (const face of faces) {
+        if (face.area > primaryFace.area) {
+          primaryFace = face;
+        }
+      }
+      
+      return { primaryFace, allFaces: faces };
+    }
+
+    // Capture baseline segmentation when only primary person is present
+    async function captureBaselineSegmentation(segmentationMask) {
+      if (!segmentationMask) return;
+      
+      // Only capture baseline when exactly one person is detected
+      const personDetection = await detectPrimaryPerson();
+      if (!personDetection || personDetection.allFaces.length !== 1) {
+        return;
+      }
+      
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = outputCanvas.width;
+      canvas.height = outputCanvas.height;
+      
+      // Draw the segmentation mask
+      ctx.drawImage(segmentationMask, 0, 0, canvas.width, canvas.height);
+      const maskData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      
+      if (!baselineSegmentation) {
+        // First baseline frame - just copy it
+        baselineSegmentation = new Uint8ClampedArray(maskData.data);
+        baselineFrameCount = 1;
+      } else {
+        // Average with previous frames to create a stable baseline
+        for (let i = 0; i < maskData.data.length; i += 4) {
+          const currentMask = maskData.data[i];
+          const avgMask = (baselineSegmentation[i] * baselineFrameCount + currentMask) / (baselineFrameCount + 1);
+          baselineSegmentation[i] = avgMask;
+          baselineSegmentation[i + 1] = avgMask;
+          baselineSegmentation[i + 2] = avgMask;
+          baselineSegmentation[i + 3] = 255;
+        }
+        baselineFrameCount++;
+      }
+    }
+    
+    // Check if we should start capturing baseline (when only one person detected)
+    async function shouldCaptureBaseline() {
+      if (!video.videoWidth || !video.videoHeight) return false;
+      
+      const personDetection = await detectPrimaryPerson();
+      return personDetection && personDetection.allFaces.length === 1;
+    }
+
+    // Create smart blended segmentation that allows face movement but maintains body bounds
+    function createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation) {
+      if (!baselineSegmentation || !currentSegmentation) {
+        return currentSegmentation;
+      }
+      
+      const blendedSegmentation = new Uint8ClampedArray(currentSegmentation.length);
+      const width = outputCanvas.width;
+      const height = outputCanvas.height;
+      
+      for (let i = 0; i < currentSegmentation.length; i += 4) {
+        const currentMask = currentSegmentation[i];
+        const baselineMask = baselineSegmentation[i];
+        
+        // Use the maximum of current and baseline segmentation
+        // This allows the person to move (current segmentation) while maintaining
+        // the maximum bounds established in the baseline
+        const blendedMask = Math.max(currentMask, baselineMask * 0.7); // Slightly reduce baseline influence
+        
+        blendedSegmentation[i] = blendedMask;
+        blendedSegmentation[i + 1] = blendedMask;
+        blendedSegmentation[i + 2] = blendedMask;
+        blendedSegmentation[i + 3] = 255;
+      }
+      
+      return blendedSegmentation;
+    }
+    
+    // Initialize MediaPipe Selfie Segmentation
+    async function initializeMediaPipe() {
+      try {
+        addDebug('Initializing MediaPipe...');
+        
+        selfieSegmentation = new SelfieSegmentation({
+          locateFile: (file) => {
+            return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
+          }
+        });
+        
+        selfieSegmentation.setOptions({
+          modelSelection: 1, // 0 for general, 1 for landscape (better quality)
+          selfieMode: false,
+        });
+        
+        selfieSegmentation.onResults(onResults);
+        
+        camera = new Camera(video, {
+          onFrame: async () => {
+            if (virtualBackgroundEnabled) {
+              await selfieSegmentation.send({image: video});
+            }
+          },
+          width: 640,
+          height: 480
+        });
+        
+        await camera.start();
+        addDebug('✓ MediaPipe initialized successfully');
+        
+      } catch (error) {
+        addDebug(`MediaPipe initialization failed: ${error.message}`);
+        // Fallback to simple background removal
+        startSimpleBackgroundProcessing();
+      }
+    }
+
+    // MediaPipe results callback
+    async function onResults(results) {
+      if (!virtualBackgroundEnabled) return;
+      
+      // Set canvas size to match video
+      outputCanvas.width = video.videoWidth;
+      outputCanvas.height = video.videoHeight;
+      
+      // Clear canvas
+      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
+      
+      // Draw blue background first
+      drawBackground();
+      
+      // Check if we have segmentation data
+      if (results.segmentationMask) {
+        // Handle baseline capture for ghost mode
+        if (ghostModeEnabled && isCapturingBaseline) {
+          const shouldCapture = await shouldCaptureBaseline();
+          if (shouldCapture && baselineFrameCount < BASELINE_FRAMES_NEEDED) {
+            await captureBaselineSegmentation(results.segmentationMask);
+            if (baselineFrameCount >= BASELINE_FRAMES_NEEDED) {
+              isCapturingBaseline = false;
+              addDebug('✓ Baseline segmentation captured - ghost mode active');
+            }
+          }
+        }
+        
+        // Create temporary canvas for mask processing
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Choose which segmentation to use
+        let maskToUse;
+        if (ghostModeEnabled && baselineSegmentation && !isCapturingBaseline) {
+          // Get current segmentation
+          const maskCanvas = document.createElement('canvas');
+          const maskCtx = maskCanvas.getContext('2d');
+          maskCanvas.width = outputCanvas.width;
+          maskCanvas.height = outputCanvas.height;
+          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+          const currentSegmentation = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+          
+          // Create smart blended segmentation
+          maskToUse = createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation);
+        } else {
+          // Use current live segmentation
+          const maskCanvas = document.createElement('canvas');
+          const maskCtx = maskCanvas.getContext('2d');
+          maskCanvas.width = outputCanvas.width;
+          maskCanvas.height = outputCanvas.height;
+          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+          maskToUse = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
+        }
+        
+        // Apply the chosen mask
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          const maskValue = maskToUse[i];
+          
+          if (maskValue < 128) { 
+            // Background pixel - make transparent (blue background shows through)
+            frameData.data[i + 3] = 0;
+          }
+          // Person pixels remain fully opaque - no transparency applied
+        }
+        
+        // Put the masked person on top of blue background
+        tempCtx.putImageData(frameData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
+        
+      } else {
+        // Fallback: just draw the video over blue background
+        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
+      }
+    }
+
+    // Draw different background types
+    function drawBackground() {
+      ctx.fillStyle = '#4169E1'; // Royal blue - change this hex code for different blue shades
+      ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
+    }
+
+    // Fallback simple background processing
+    function startSimpleBackgroundProcessing() {
+      const processFrame = () => {
+        if (!virtualBackgroundEnabled) return;
+        
+        // Set canvas size to match video
+        outputCanvas.width = video.videoWidth;
+        outputCanvas.height = video.videoHeight;
+        
+        // Draw blue background first
+        drawBackground();
+        
+        // Create temporary canvas for processing
+        const tempCanvas = document.createElement('canvas');
+        const tempCtx = tempCanvas.getContext('2d');
+        tempCanvas.width = outputCanvas.width;
+        tempCanvas.height = outputCanvas.height;
+        
+        // Draw video frame to temp canvas
+        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
+        
+        // Get image data for processing
+        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+        const data = imageData.data;
+        
+        // Simple background removal
+        for (let i = 0; i < data.length; i += 4) {
+          const r = data[i];
+          const g = data[i + 1];
+          const b = data[i + 2];
+          
+          // Better heuristic for background detection
+          const brightness = (r + g + b) / 3;
+          const isBackground = (
+            // Very bright areas (likely background)
+            brightness > 180 ||
+            // Areas with low color variation (likely uniform background)
+            (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 && brightness < 120)
+          ) && 
+          // Exclude skin tones
+          !(r > 95 && g > 40 && b > 20 && r > g && r > b);
+          
+          if (isBackground) {
+            // Make background transparent
+            data[i + 3] = 0;
+          }
+        }
+        
+        // Put processed image data back and draw on main canvas
+        tempCtx.putImageData(imageData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
+        
+        requestAnimationFrame(processFrame);
+      };
+      
+      processFrame();
+    }
+    
+    function checkBrowserSupport() {
+      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+        addDebug('ERROR: Camera API not supported');
+        return false;
+      }
+      addDebug('✓ Camera API supported');
+      return true;
+    }
+
+    async function loadModels() {
+      addDebug('Loading face detection models...');
+      try {
+        const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
+        const loadPromise = Promise.all([
+          faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+          faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
+          faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
+        ]);
+        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Model loading timeout')), 15000));
+        await Promise.race([loadPromise, timeoutPromise]);
+        addDebug('✓ Models loaded');
+        return true;
+      } catch (err) {
+        addDebug(`Model load failed: ${err.message}`);
+        if ('FaceDetector' in window) {
+          addDebug('Using native FaceDetector fallback');
+          return 'native';
+        }
+        addDebug('Using motion detection fallback');
+        return 'motion';
+      }
+    }
+
+    async function initNativeFaceDetection() {
+      try {
+        nativeFaceDetector = new FaceDetector({ maxDetectedFaces: 10, fastMode: false });
+        return true;
+      } catch (err) {
+        addDebug(`Native detector failed: ${err.message}`);
+        return false;
+      }
+    }
+
+    function isLowLight(video, threshold = 50) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let total = 0;
+      for (let i = 0; i < frame.data.length; i += 4) {
+        const brightness = 0.299*frame.data[i] + 0.587*frame.data[i+1] + 0.114*frame.data[i+2];
+        total += brightness;
+      }
+      const avg = total / (canvas.width * canvas.height);
+      if (Math.random() < 0.2) addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
+      return avg < threshold;
+    }
+
+    function showToast(toast) {
+      toast.className = "toast show";
+      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 8000);
+    }
+
+    function detectMotion(video) {
+      const canvas = document.createElement('canvas');
+      const ctx = canvas.getContext('2d');
+      canvas.width = video.videoWidth;
+      canvas.height = video.videoHeight;
+      ctx.drawImage(video, 0, 0);
+      const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
+      let hasMotion = false;
+      if (lastFrame) {
+        let diff = 0;
+        for (let i = 0; i < currentFrame.data.length; i += 4) {
+          const r = Math.abs(currentFrame.data[i] - lastFrame.data[i]);
+          const g = Math.abs(currentFrame.data[i+1] - lastFrame.data[i+1]);
+          const b = Math.abs(currentFrame.data[i+2] - lastFrame.data[i+2]);
+          diff += (r+g+b)/3;
+        }
+        const avgDiff = diff / (canvas.width * canvas.height);
+        hasMotion = avgDiff > 10;
+      }
+      lastFrame = currentFrame;
+      return hasMotion;
+    }
+
+    async function runDetection() {
+      if (video.videoWidth === 0 || video.videoHeight === 0) return;
+      let faceCount = 0;
+
+      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
+        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
+        faceCount = detections.length;
+      } else if (nativeFaceDetector) {
+        const faces = await nativeFaceDetector.detect(video);
+        faceCount = faces.length;
+      } else {
+        const hasMotion = detectMotion(video);
+        faceCount = hasMotion ? 2 : 1;
+      }
+
+      // Track max faces in current 5-second period
+      if (faceCount > maxFacesInPeriod) {
+        maxFacesInPeriod = faceCount;
+      }
+
+      if (faceCount > 1) showToast(faceToast);
+
+      const lowLight = isLowLight(video);
+      if (lowLight) {
+        addDebug('⚠️ Low lighting detected!');
+        showToast(lowLightToast);
+      }
+    }
+
+    // Log max faces every 5 seconds
+    function logMaxFaces() {
+      addDebug(`Max faces detected in last 5 seconds: ${maxFacesInPeriod}`);
+      maxFacesInPeriod = 0; // Reset for next period
+    }
+
+    async function startVideo() {
+      addDebug('Requesting camera access...');
+      startBtn.disabled = true;
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
+        video.srcObject = stream;
+        addDebug('Camera connected. Starting detection...');
+        // Start audio SNR too
+        startAudioSNRLogging();
+      } catch (err) {
+        addDebug(`Camera error: ${err.message}`);
+        startBtn.disabled = false;
+      }
+    }
+
+    // --- AUDIO SNR LOGGING ---
+    async function startAudioSNRLogging() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        const audioCtx = new AudioContext();
+        const source = audioCtx.createMediaStreamSource(stream);
+
+        const analyser = audioCtx.createAnalyser();
+        analyser.fftSize = 2048;
+        source.connect(analyser);
+
+        const dataArray = new Float32Array(analyser.fftSize);
+
+        function computeSNR() {
+          analyser.getFloatTimeDomainData(dataArray);
+
+          let signalPower = 0;
+          for (let i = 0; i < dataArray.length; i++) {
+            signalPower += dataArray[i] * dataArray[i];
+          }
+          signalPower /= dataArray.length;
+
+          const sorted = [...dataArray].map(Math.abs).sort((a, b) => a - b);
+          const noiseSlice = sorted.slice(0, Math.floor(sorted.length * 0.1));
+          let noisePower = noiseSlice.reduce((sum, v) => sum + v * v, 0) / noiseSlice.length;
+          if (noisePower <= 0) noisePower = 1e-10;
+
+          const snrDb = 10 * Math.log10(signalPower / noisePower);
+          addDebug(`Audio SNR: ${snrDb.toFixed(2)} dB`);
+
+          if (snrDb < 10) {
+            showToast(snrToast);
+          }
+        }
+
+        setInterval(computeSNR, 1000);
+        addDebug("✓ Audio SNR logging started");
+      } catch (err) {
+        addDebug("Audio error: " + err.message);
+      }
+    }
+
+    startBtn.addEventListener('click', startVideo);
+    video.addEventListener('play', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      
+      detectionInterval = setInterval(runDetection, 1000);
+      faceLogInterval = setInterval(logMaxFaces, 5000);
+      
+      addDebug('Video started. Detection active.');
+    });
+
+    window.addEventListener('beforeunload', () => {
+      if (detectionInterval) clearInterval(detectionInterval);
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      if (camera) camera.stop();
+      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+    });
+
+    async function initialize() {
+      addDebug('Checking browser support...');
+      if (!checkBrowserSupport()) {
+        addDebug('Browser does not support camera access');
+        return;
+      }
+      if (typeof faceapi === 'undefined') {
+        addDebug('Face-api.js failed to load');
+        return;
+      }
+      const modelResult = await loadModels();
+      if (modelResult === 'native') {
+        await initNativeFaceDetection();
+      }
+      startBtn.disabled = false;
+    }
+
+    window.addEventListener('load', initialize);
   </script>
 </body>
 </html>
