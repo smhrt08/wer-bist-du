@@ -145,24 +145,41 @@
     }
 
     button {
-      padding: 12px 24px;
+      /* background-color: #007bff; */
+      font-family: "Open Sans", sans-serif;
       font-size: 16px;
-      border: none;
-      border-radius: 8px;
-      background-color: #007bff;
-      color: white;
+      letter-spacing: 2px;
+      text-decoration: none;
+      text-transform: uppercase;
+      color: #000;
       cursor: pointer;
-      transition: background-color 0.3s;
+      border: 3px solid;
+      padding: 0.25em 0.5em;
+      box-shadow: 1px 1px 0px 0px, 2px 2px 0px 0px, 3px 3px 0px 0px, 4px 4px 0px 0px, 5px 5px 0px 0px;
+      position: relative;
+      user-select: none;
+      -webkit-user-select: none;
+      touch-action: manipulation;
+    }
+    .button:active {
+      box-shadow: 0px 0px 0px 0px;
+      top: 5px;
+      left: 5px;
+    }
+    @media (min-width: 768px) {
+      .button {
+        padding: 0.25em 0.75em;
+      }
     }
 
-    button:hover:not(:disabled) {
+    /* button:hover:not(:disabled) {
       background-color: #0056b3;
     }
 
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
-    }
+    } */
 
     .toast {
       visibility: hidden;
@@ -207,13 +224,13 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.008</h3>
+      <h3>v4.009</h3>
       <button id="startBtn">Start Camera</button>
     </div>
 
     <div class="video-row">
       <div class="card">
-        <h3>Face Detection View</h3>
+        <!-- <h3>Face Detection View</h3> -->
         <div class="video-container">
           <video id="videoLeft" autoplay muted playsinline></video>
           <canvas id="canvasLeft" class="hidden"></canvas>
@@ -221,7 +238,7 @@
       </div>
 
       <div class="card">
-        <h3>Background Isolation View</h3>
+        <!-- <h3>Background Isolation View</h3> -->
         <div class="video-container">
           <video id="videoRight" autoplay muted playsinline></video>
           <canvas id="canvasRight" class="hidden"></canvas>
