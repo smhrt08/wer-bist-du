@@ -23,37 +23,18 @@
       font-size: 2rem;
       font-weight: 700;
       color: #1e293b;
-    }    
+    }
     .header h3 {
       margin: 0 0 15px 0;
+      color: #64748b;
     }
-    .header p { color: #64748b; margin-bottom: 1rem; }
-    
-    .main-container {
-      display: flex;
-      flex: 1;
-      gap: 20px;
-      min-height: 0;
-    }
-    
-    .left-panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      gap: 15px;
-    }
-    
-    .right-panel {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-    }
-    
+
     .video-row {
       display: flex;
       gap: 1.5rem;
+      margin-bottom: 1.5rem;
     }
+
     .card {
       flex: 1;
       background: white;
@@ -61,6 +42,13 @@
       box-shadow: 0 4px 10px rgba(0,0,0,0.08);
       padding: 1rem;
     }
+
+    .card h3 {
+      margin-bottom: 0.5rem;
+      color: #1e3a8a;
+      font-size: 1.1rem;
+    }
+
     .video-container {
       position: relative;
       background: #0f172a;
@@ -68,23 +56,35 @@
       overflow: hidden;
       aspect-ratio: 16/9;
     }
+
     video, canvas {
       width: 100%;
       height: 100%;
       object-fit: contain;
     }
-    
-    #outputCanvas {
-      display: none;
+
+    .hidden {
+      display: none !important;
     }
-    
+
     .controls {
       margin-top: 1rem;
       display: flex;
       gap: 1rem;
-      justify-content: space-between;
+      align-items: center;
     }
-    
+
+    .control-group {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+    }
+
+    .control-label {
+      font-size: 0.875rem;
+      color: #334155;
+    }
+
     .toggle {
       position: relative;
       width: 3rem;
@@ -94,7 +94,16 @@
       cursor: pointer;
       transition: background 0.3s;
     }
-    .toggle.active { background: #2563eb; }
+
+    .toggle.disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .toggle.active {
+      background: #2563eb;
+    }
+
     .toggle-slider {
       position: absolute;
       top: 0.2rem;
@@ -105,56 +114,24 @@
       border-radius: 50%;
       transition: transform 0.3s;
     }
-    .toggle.active .toggle-slider { transform: translateX(1.4rem); }
-    
-    .background-selector {
-      display: flex;
-      gap: 10px;
-      margin-top: 10px;
+
+    .toggle.active .toggle-slider {
+      transform: translateX(1.4rem);
     }
-    
-    .bg-option {
-      width: 60px;
-      height: 40px;
-      border: 2px solid #ccc;
-      border-radius: 4px;
-      cursor: pointer;
-      transition: border-color 0.3s;
-    }
-    
-    .bg-option.selected {
-      border-color: #007bff;
-    }
-    
-    .bg-blur {
-      background: linear-gradient(45deg, #f0f0f0 25%, transparent 25%), 
-                  linear-gradient(-45deg, #f0f0f0 25%, transparent 25%), 
-                  linear-gradient(45deg, transparent 75%, #f0f0f0 75%), 
-                  linear-gradient(-45deg, transparent 75%, #f0f0f0 75%);
-      background-size: 8px 8px;
-      background-position: 0 0, 0 4px, 4px -4px, -4px 0px;
-    }
-    
-    .bg-gradient {
-      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-    }
-    
-    .bg-solid {
-      background: #4CAF50;
-    }
-    
+
     .debug-panel {
       background: white;
       border-radius: 1rem;
       box-shadow: 0 4px 10px rgba(0,0,0,0.08);
       padding: 1rem;
-      margin-top: 1.5rem;
     }
+
     .debug-panel h2 {
       color: #1e293b;
       font-size: 1.2rem;
       margin-bottom: 0.5rem;
     }
+
     .debug-log {
       height: 18rem;
       overflow-y: auto;
@@ -166,7 +143,7 @@
       font-size: 0.8rem;
       color: #334155;
     }
-    
+
     button {
       padding: 12px 24px;
       font-size: 16px;
@@ -177,28 +154,25 @@
       cursor: pointer;
       transition: background-color 0.3s;
     }
-    
-    button:hover {
+
+    button:hover:not(:disabled) {
       background-color: #0056b3;
     }
-    
+
     button:disabled {
       background-color: #ccc;
       cursor: not-allowed;
     }
-    
+
     .toast {
       visibility: hidden;
       display: flex;
       width: 348px;
-      height: 44px;
       min-height: 44px;
       flex-direction: row;
       align-items: center;
       gap: 8px;
-      flex-shrink: 0;
       border-radius: 8px;
-      border: 1px solid #F0775C;
       background: #F9F9F9;
       box-shadow: 0 0 8px 0 rgba(22, 51, 95, 0.10);
       color: #333;
@@ -208,39 +182,23 @@
       bottom: 30px;
       left: 50%;
       transform: translateX(-50%);
-      z-index: 1;
+      z-index: 1000;
       transition: visibility 0.5s, opacity 0.5s;
       opacity: 0;
-      box-sizing: border-box;
     }
-    
+
     .toast.show {
       visibility: visible;
       opacity: 1;
     }
-    
-    #faceToast { 
-      border-color: #F0775C;
+
+    #faceToast {
+      border: 1px solid #F0775C;
     }
-    #lowLightToast { 
-      border-color: #FFA500;
-    }
-    #snrToast { 
-      border-color: #6a0dad;
-    }
-    
-    /* Responsive design for smaller screens */
+
     @media (max-width: 768px) {
-      .main-container {
+      .video-row {
         flex-direction: column;
-      }
-      
-      .right-panel {
-        min-height: 300px;
-      }
-      
-      video, canvas {
-        max-height: 50vh;
       }
     }
   </style>
@@ -249,65 +207,42 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.007</h3>
+      <h3>v4.008</h3>
       <button id="startBtn">Start Camera</button>
     </div>
-  
-  <!-- <div class="main-container">
-    <div class="left-panel">
-      <div class="video-container">
-        <video id="video" width="640" height="480" autoplay muted playsinline></video>
-        <canvas id="outputCanvas" width="640" height="480"></canvas>
-        
-        <div class="controls">
-          <div class="toggle-container">
-            <span class="toggle-label">Virtual Background</span>
-            <div class="toggle-switch" id="backgroundToggle">
-              <div class="toggle-slider"></div>
-            </div>
-          </div>
-          
-          <div class="toggle-container">
-            <span class="toggle-label">Ghost Mode</span>
-            <div class="toggle-switch" id="ghostToggle">
-              <div class="toggle-slider"></div>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-    
-    <div class="right-panel">
-      <div id="debug" height="480"></div>
-    </div>
-  </div> -->
 
-  <div class="video-row">
-      <!-- Left: Face Detection -->
+    <div class="video-row">
       <div class="card">
-        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Face Detection View</h3>
+        <h3>Face Detection View</h3>
         <div class="video-container">
           <video id="videoLeft" autoplay muted playsinline></video>
-          <canvas id="outputCanvas"></canvas>
-          <!-- <canvas id="canvasFaces"></canvas> -->
+          <canvas id="canvasLeft" class="hidden"></canvas>
         </div>
       </div>
 
-      <!-- Right: Background Isolation -->
       <div class="card">
-        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Background Isolation View</h3>
+        <h3>Background Isolation View</h3>
         <div class="video-container">
           <video id="videoRight" autoplay muted playsinline></video>
-          <canvas id="outputCanvas" class="hidden"></canvas>
+          <canvas id="canvasRight" class="hidden"></canvas>
         </div>
         <div class="controls">
-          <div id="bgToggle" class="toggle"><div class="toggle-slider"></div></div>
-          <div id="ghostToggle" class="toggle"><div class="toggle-slider"></div></div>
+          <div class="control-group">
+            <span class="control-label">Virtual BG</span>
+            <div id="bgToggle" class="toggle disabled">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
+          <div class="control-group">
+            <span class="control-label">Ghost Mode</span>
+            <div id="ghostToggle" class="toggle disabled">
+              <div class="toggle-slider"></div>
+            </div>
+          </div>
         </div>
       </div>
     </div>
 
-    <!-- Debug below -->
     <div class="debug-panel">
       <h2>Debug Log</h2>
       <div id="debugLog" class="debug-log"></div>
@@ -315,663 +250,462 @@
   </div>
 
   <div id="faceToast" class="toast">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
+    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none">
       <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#D42802" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>
-    Another person detected in the background!
-  </div>
-  <div id="lowLightToast" class="toast">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
-      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#FFA500" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    Low lighting detected!
-  </div>
-  <div id="snrToast" class="toast">
-    <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
-      <path d="M12 8V12M12 16H12.01M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="#6a0dad" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
-    </svg>
-    Background noise too high (low SNR)!
+    Multiple faces detected in the background!
   </div>
 
-  <!-- MediaPipe -->
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/camera_utils/camera_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/control_utils/control_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/drawing_utils/drawing_utils.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/selfie_segmentation.js"></script>
-  
-  <!-- Face API CDN -->
-  <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/dist/face-api.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/face_detection.js"></script>
 
   <script>
-    const video = document.getElementById('video');
-    const outputCanvas = document.getElementById('outputCanvas');
-    const ctx = outputCanvas.getContext('2d');
+    const videoLeft = document.getElementById('videoLeft');
+    const videoRight = document.getElementById('videoRight');
+    const canvasLeft = document.getElementById('canvasLeft');
+    const canvasRight = document.getElementById('canvasRight');
     const startBtn = document.getElementById('startBtn');
-    const debug = document.getElementById('debug');
-    const faceToast = document.getElementById('faceToast');
-    const lowLightToast = document.getElementById('lowLightToast');
-    const snrToast = document.getElementById('snrToast');
-    const backgroundToggle = document.getElementById('backgroundToggle');
-    const backgroundSelector = document.getElementById('backgroundSelector');
-    
-    let detectionInterval;
-    let faceLogInterval;
-    let nativeFaceDetector = null;
-    let lastFrame = null;
-    let maxFacesInPeriod = 0;
-    let virtualBackgroundEnabled = false;
-    let selfieSegmentation = null;
-    let camera = null;
-    let ghostModeEnabled = false;
-    let baselineSegmentation = null;
-    let isCapturingBaseline = false;
-    let baselineFrameCount = 0;
+    const bgToggle = document.getElementById('bgToggle');
     const ghostToggle = document.getElementById('ghostToggle');
-    const BASELINE_FRAMES_NEEDED = 10;
+    const debugLog = document.getElementById('debugLog');
+    const faceToast = document.getElementById('faceToast');
 
-    async function startCamera() {
-      try {
-        startBtn.disabled = true;
-        log('Requesting camera...');
-        stream = await navigator.mediaDevices.getUserMedia({
-          video: { width: 1280, height: 720 },
-          audio: false
-        });
-        videoLeft.srcObject = stream;
-        videoRight.srcObject = stream;
-        log('✓ Camera started on both feeds.');
-        await initMediaPipe();
-      } catch (err) {
-        log('Camera error: ' + err.message);
-      }
-    }
+    let stream = null;
+    let virtualBgEnabled = false;
+    let ghostModeEnabled = false;
+    let selfieSegmentation = null;
+    let faceDetection = null;
+    let camera = null;
+    let latestFaces = [];
+    let frameCount = 0;
 
-    async function initMediaPipe() {
-      selfieSegmentation = new SelfieSegmentation({
-        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
-      });
-      selfieSegmentation.setOptions({ modelSelection: 1 });
+    // Persistent mask system
+    const MASK_WIDTH = 320;
+    const MASK_HEIGHT = 180;
+    let persistentMask = null;
+    let previousFrameData = null;
+    let primaryFaceBox = null;
 
-      faceDetector = new FaceDetection.FaceDetection({
-        locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
-      });
-      faceDetector.setOptions({ model: 'short', minDetectionConfidence: 0.6 });
+    const MASK_STRENGTHEN_RATE = 0.3;
+    const MASK_DECAY_RATE = 0.02;
+    const MOTION_THRESHOLD = 15;
+    const FACE_REGION_SCALE = 3.5;
 
-      const camera = new Camera(videoLeft, {
-        onFrame: async () => {
-          await faceDetector.send({ image: videoLeft });
-          if (virtualBgEnabled)
-            await selfieSegmentation.send({ image: videoRight });
-        },
-        width: 1280,
-        height: 720
-      });
-
-      faceDetector.onResults(onFaceResults);
-      selfieSegmentation.onResults(onSegmentationResults);
-      await camera.start();
-      log('MediaPipe initialized.');
-    }
-
-    // Debug logging
-    function addDebug(msg) {
+    function log(msg) {
       const timestamp = new Date().toLocaleTimeString();
-      debug.innerHTML += `[${timestamp}] ${msg}<br>`;
-      debug.scrollTop = debug.scrollHeight;
+      debugLog.innerHTML += `[${timestamp}] ${msg}<br>`;
+      debugLog.scrollTop = debugLog.scrollHeight;
       console.log(msg);
-    }
-
-    // Virtual background toggle
-    backgroundToggle.addEventListener('click', async () => {
-      virtualBackgroundEnabled = !virtualBackgroundEnabled;
-      backgroundToggle.classList.toggle('active', virtualBackgroundEnabled);
-      
-      if (virtualBackgroundEnabled) {
-        video.style.display = 'none';
-        outputCanvas.style.display = 'block';
-        await initializeMediaPipe();
-        addDebug('✓ Virtual background enabled');
-      } else {
-        video.style.display = 'block';
-        outputCanvas.style.display = 'none';
-        if (camera) {
-          camera.stop();
-        }
-        addDebug('✓ Virtual background disabled');
-      }
-    });
-
-    // Ghost Mode toggle
-    ghostToggle.addEventListener('click', async () => {
-      ghostModeEnabled = !ghostModeEnabled;
-      ghostToggle.classList.toggle('active', ghostModeEnabled);
-      
-      if (ghostModeEnabled) {
-        // Reset baseline when enabling ghost mode
-        baselineSegmentation = null;
-        isCapturingBaseline = true;
-        baselineFrameCount = 0;
-        addDebug('✓ Ghost mode enabled - capturing baseline segmentation...');
-      } else {
-        baselineSegmentation = null;
-        isCapturingBaseline = false;
-        addDebug('✓ Ghost mode disabled');
-      }
-    });
-
-    // Detect primary person (largest face)
-    async function detectPrimaryPerson() {
-      if (!video.videoWidth || !video.videoHeight) return null;
-      
-      let faces = [];
-      
-      // Try face-api.js first
-      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        faces = detections.map(detection => ({
-          x: detection.box.x,
-          y: detection.box.y,
-          width: detection.box.width,
-          height: detection.box.height,
-          area: detection.box.width * detection.box.height
-        }));
-      } 
-      // Fallback to native face detector
-      else if (nativeFaceDetector) {
-        const nativeFaces = await nativeFaceDetector.detect(video);
-        faces = nativeFaces.map(face => ({
-          x: face.boundingBox.x,
-          y: face.boundingBox.y,
-          width: face.boundingBox.width,
-          height: face.boundingBox.height,
-          area: face.boundingBox.width * face.boundingBox.height
-        }));
-      }
-      
-      if (faces.length === 0) return null;
-      
-      // Find the largest face (primary person)
-      let primaryFace = faces[0];
-      for (const face of faces) {
-        if (face.area > primaryFace.area) {
-          primaryFace = face;
-        }
-      }
-      
-      return { primaryFace, allFaces: faces };
-    }
-
-    // Capture baseline segmentation when only primary person is present
-    async function captureBaselineSegmentation(segmentationMask) {
-      if (!segmentationMask) return;
-      
-      // Only capture baseline when exactly one person is detected
-      const personDetection = await detectPrimaryPerson();
-      if (!personDetection || personDetection.allFaces.length !== 1) {
-        return;
-      }
-      
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = outputCanvas.width;
-      canvas.height = outputCanvas.height;
-      
-      // Draw the segmentation mask
-      ctx.drawImage(segmentationMask, 0, 0, canvas.width, canvas.height);
-      const maskData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      
-      if (!baselineSegmentation) {
-        // First baseline frame - just copy it
-        baselineSegmentation = new Uint8ClampedArray(maskData.data);
-        baselineFrameCount = 1;
-      } else {
-        // Average with previous frames to create a stable baseline
-        for (let i = 0; i < maskData.data.length; i += 4) {
-          const currentMask = maskData.data[i];
-          const avgMask = (baselineSegmentation[i] * baselineFrameCount + currentMask) / (baselineFrameCount + 1);
-          baselineSegmentation[i] = avgMask;
-          baselineSegmentation[i + 1] = avgMask;
-          baselineSegmentation[i + 2] = avgMask;
-          baselineSegmentation[i + 3] = 255;
-        }
-        baselineFrameCount++;
-      }
-    }
-    
-    // Check if we should start capturing baseline (when only one person detected)
-    async function shouldCaptureBaseline() {
-      if (!video.videoWidth || !video.videoHeight) return false;
-      
-      const personDetection = await detectPrimaryPerson();
-      return personDetection && personDetection.allFaces.length === 1;
-    }
-
-    // Create smart blended segmentation that allows face movement but maintains body bounds
-    function createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation) {
-      if (!baselineSegmentation || !currentSegmentation) {
-        return currentSegmentation;
-      }
-      
-      const blendedSegmentation = new Uint8ClampedArray(currentSegmentation.length);
-      const width = outputCanvas.width;
-      const height = outputCanvas.height;
-      
-      for (let i = 0; i < currentSegmentation.length; i += 4) {
-        const currentMask = currentSegmentation[i];
-        const baselineMask = baselineSegmentation[i];
-        
-        // Use the maximum of current and baseline segmentation
-        // This allows the person to move (current segmentation) while maintaining
-        // the maximum bounds established in the baseline
-        const blendedMask = Math.max(currentMask, baselineMask * 0.7); // Slightly reduce baseline influence
-        
-        blendedSegmentation[i] = blendedMask;
-        blendedSegmentation[i + 1] = blendedMask;
-        blendedSegmentation[i + 2] = blendedMask;
-        blendedSegmentation[i + 3] = 255;
-      }
-      
-      return blendedSegmentation;
-    }
-    
-    // Initialize MediaPipe Selfie Segmentation
-    async function initializeMediaPipe() {
-      try {
-        addDebug('Initializing MediaPipe...');
-        
-        selfieSegmentation = new SelfieSegmentation({
-          locateFile: (file) => {
-            return `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${file}`;
-          }
-        });
-        
-        selfieSegmentation.setOptions({
-          modelSelection: 1, // 0 for general, 1 for landscape (better quality)
-          selfieMode: false,
-        });
-        
-        selfieSegmentation.onResults(onResults);
-        
-        camera = new Camera(video, {
-          onFrame: async () => {
-            if (virtualBackgroundEnabled) {
-              await selfieSegmentation.send({image: video});
-            }
-          },
-          width: 640,
-          height: 480
-        });
-        
-        await camera.start();
-        addDebug('✓ MediaPipe initialized successfully');
-        
-      } catch (error) {
-        addDebug(`MediaPipe initialization failed: ${error.message}`);
-        // Fallback to simple background removal
-        startSimpleBackgroundProcessing();
-      }
-    }
-
-    // MediaPipe results callback
-    async function onResults(results) {
-      if (!virtualBackgroundEnabled) return;
-      
-      // Set canvas size to match video
-      outputCanvas.width = video.videoWidth;
-      outputCanvas.height = video.videoHeight;
-      
-      // Clear canvas
-      ctx.clearRect(0, 0, outputCanvas.width, outputCanvas.height);
-      
-      // Draw blue background first
-      drawBackground();
-      
-      // Check if we have segmentation data
-      if (results.segmentationMask) {
-        // Handle baseline capture for ghost mode
-        if (ghostModeEnabled && isCapturingBaseline) {
-          const shouldCapture = await shouldCaptureBaseline();
-          if (shouldCapture && baselineFrameCount < BASELINE_FRAMES_NEEDED) {
-            await captureBaselineSegmentation(results.segmentationMask);
-            if (baselineFrameCount >= BASELINE_FRAMES_NEEDED) {
-              isCapturingBaseline = false;
-              addDebug('✓ Baseline segmentation captured - ghost mode active');
-            }
-          }
-        }
-        
-        // Create temporary canvas for mask processing
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = outputCanvas.width;
-        tempCanvas.height = outputCanvas.height;
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        
-        // Choose which segmentation to use
-        let maskToUse;
-        if (ghostModeEnabled && baselineSegmentation && !isCapturingBaseline) {
-          // Get current segmentation
-          const maskCanvas = document.createElement('canvas');
-          const maskCtx = maskCanvas.getContext('2d');
-          maskCanvas.width = outputCanvas.width;
-          maskCanvas.height = outputCanvas.height;
-          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-          const currentSegmentation = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
-          
-          // Create smart blended segmentation
-          maskToUse = createSmartBlendedSegmentation(currentSegmentation, baselineSegmentation);
-        } else {
-          // Use current live segmentation
-          const maskCanvas = document.createElement('canvas');
-          const maskCtx = maskCanvas.getContext('2d');
-          maskCanvas.width = outputCanvas.width;
-          maskCanvas.height = outputCanvas.height;
-          maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
-          maskToUse = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height).data;
-        }
-        
-        // Apply the chosen mask
-        for (let i = 0; i < frameData.data.length; i += 4) {
-          const maskValue = maskToUse[i];
-          
-          if (maskValue < 128) { 
-            // Background pixel - make transparent (blue background shows through)
-            frameData.data[i + 3] = 0;
-          }
-          // Person pixels remain fully opaque - no transparency applied
-        }
-        
-        // Put the masked person on top of blue background
-        tempCtx.putImageData(frameData, 0, 0);
-        ctx.drawImage(tempCanvas, 0, 0);
-        
-      } else {
-        // Fallback: just draw the video over blue background
-        ctx.drawImage(video, 0, 0, outputCanvas.width, outputCanvas.height);
-      }
-    }
-
-    // Draw different background types
-    function drawBackground() {
-      ctx.fillStyle = '#4169E1'; // Royal blue - change this hex code for different blue shades
-      ctx.fillRect(0, 0, outputCanvas.width, outputCanvas.height);
-    }
-
-    // Fallback simple background processing
-    function startSimpleBackgroundProcessing() {
-      const processFrame = () => {
-        if (!virtualBackgroundEnabled) return;
-        
-        // Set canvas size to match video
-        outputCanvas.width = video.videoWidth;
-        outputCanvas.height = video.videoHeight;
-        
-        // Draw blue background first
-        drawBackground();
-        
-        // Create temporary canvas for processing
-        const tempCanvas = document.createElement('canvas');
-        const tempCtx = tempCanvas.getContext('2d');
-        tempCanvas.width = outputCanvas.width;
-        tempCanvas.height = outputCanvas.height;
-        
-        // Draw video frame to temp canvas
-        tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
-        
-        // Get image data for processing
-        const imageData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-        const data = imageData.data;
-        
-        // Simple background removal
-        for (let i = 0; i < data.length; i += 4) {
-          const r = data[i];
-          const g = data[i + 1];
-          const b = data[i + 2];
-          
-          // Better heuristic for background detection
-          const brightness = (r + g + b) / 3;
-          const isBackground = (
-            // Very bright areas (likely background)
-            brightness > 180 ||
-            // Areas with low color variation (likely uniform background)
-            (Math.abs(r - g) < 30 && Math.abs(g - b) < 30 && Math.abs(r - b) < 30 && brightness < 120)
-          ) && 
-          // Exclude skin tones
-          !(r > 95 && g > 40 && b > 20 && r > g && r > b);
-          
-          if (isBackground) {
-            // Make background transparent
-            data[i + 3] = 0;
-          }
-        }
-        
-        // Put processed image data back and draw on main canvas
-        tempCtx.putImageData(imageData, 0, 0);
-        ctx.drawImage(tempCanvas, 0, 0);
-        
-        requestAnimationFrame(processFrame);
-      };
-      
-      processFrame();
-    }
-    
-    function checkBrowserSupport() {
-      if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-        addDebug('ERROR: Camera API not supported');
-        return false;
-      }
-      addDebug('✓ Camera API supported');
-      return true;
-    }
-
-    async function loadModels() {
-      addDebug('Loading face detection models...');
-      try {
-        const modelPath = 'https://cdn.jsdelivr.net/npm/@vladmandic/face-api@1.7.13/model/';
-        const loadPromise = Promise.all([
-          faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
-          faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
-          faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
-        ]);
-        const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('Model loading timeout')), 15000));
-        await Promise.race([loadPromise, timeoutPromise]);
-        addDebug('✓ Models loaded');
-        return true;
-      } catch (err) {
-        addDebug(`Model load failed: ${err.message}`);
-        if ('FaceDetector' in window) {
-          addDebug('Using native FaceDetector fallback');
-          return 'native';
-        }
-        addDebug('Using motion detection fallback');
-        return 'motion';
-      }
-    }
-
-    async function initNativeFaceDetection() {
-      try {
-        nativeFaceDetector = new FaceDetector({ maxDetectedFaces: 10, fastMode: false });
-        return true;
-      } catch (err) {
-        addDebug(`Native detector failed: ${err.message}`);
-        return false;
-      }
-    }
-
-    function isLowLight(video, threshold = 50) {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
-      const frame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      let total = 0;
-      for (let i = 0; i < frame.data.length; i += 4) {
-        const brightness = 0.299*frame.data[i] + 0.587*frame.data[i+1] + 0.114*frame.data[i+2];
-        total += brightness;
-      }
-      const avg = total / (canvas.width * canvas.height);
-      if (Math.random() < 0.2) addDebug(`Brightness level: ${avg.toFixed(1)} (threshold: ${threshold})`);
-      return avg < threshold;
     }
 
     function showToast(toast) {
       toast.className = "toast show";
-      setTimeout(() => { toast.className = toast.className.replace("show", ""); }, 8000);
+      setTimeout(() => { toast.className = "toast"; }, 5000);
     }
 
-    function detectMotion(video) {
-      const canvas = document.createElement('canvas');
-      const ctx = canvas.getContext('2d');
-      canvas.width = video.videoWidth;
-      canvas.height = video.videoHeight;
-      ctx.drawImage(video, 0, 0);
-      const currentFrame = ctx.getImageData(0, 0, canvas.width, canvas.height);
-      let hasMotion = false;
-      if (lastFrame) {
-        let diff = 0;
-        for (let i = 0; i < currentFrame.data.length; i += 4) {
-          const r = Math.abs(currentFrame.data[i] - lastFrame.data[i]);
-          const g = Math.abs(currentFrame.data[i+1] - lastFrame.data[i+1]);
-          const b = Math.abs(currentFrame.data[i+2] - lastFrame.data[i+2]);
-          diff += (r+g+b)/3;
-        }
-        const avgDiff = diff / (canvas.width * canvas.height);
-        hasMotion = avgDiff > 10;
-      }
-      lastFrame = currentFrame;
-      return hasMotion;
-    }
-
-    async function runDetection() {
-      if (video.videoWidth === 0 || video.videoHeight === 0) return;
-      let faceCount = 0;
-
-      if (typeof faceapi !== 'undefined' && faceapi.nets.tinyFaceDetector.isLoaded) {
-        const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions());
-        faceCount = detections.length;
-      } else if (nativeFaceDetector) {
-        const faces = await nativeFaceDetector.detect(video);
-        faceCount = faces.length;
-      } else {
-        const hasMotion = detectMotion(video);
-        faceCount = hasMotion ? 2 : 1;
-      }
-
-      // Track max faces in current 5-second period
-      if (faceCount > maxFacesInPeriod) {
-        maxFacesInPeriod = faceCount;
-      }
-
-      if (faceCount > 1) showToast(faceToast);
-
-      const lowLight = isLowLight(video);
-      if (lowLight) {
-        addDebug('⚠️ Low lighting detected!');
-        showToast(lowLightToast);
-      }
-    }
-
-    // Log max faces every 5 seconds
-    function logMaxFaces() {
-      addDebug(`Max faces detected in last 5 seconds: ${maxFacesInPeriod}`);
-      maxFacesInPeriod = 0; // Reset for next period
-    }
-
-    async function startVideo() {
-      addDebug('Requesting camera access...');
-      startBtn.disabled = true;
+    async function startCamera() {
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ video: { width: 640, height: 480 }, audio: false });
-        video.srcObject = stream;
-        addDebug('Camera connected. Starting detection...');
-        // Start audio SNR too
-        startAudioSNRLogging();
+        startBtn.disabled = true;
+        startBtn.textContent = 'Initializing...';
+        log('Requesting camera...');
+
+        stream = await navigator.mediaDevices.getUserMedia({
+          video: { width: 1280, height: 720, facingMode: 'user' },
+          audio: false
+        });
+
+        videoLeft.srcObject = stream;
+        videoRight.srcObject = stream;
+
+        await videoLeft.play();
+        await videoRight.play();
+
+        log('✓ Camera started on both feeds');
+        startBtn.textContent = 'Camera Active';
+        bgToggle.classList.remove('disabled');
+
+        await initMediaPipe();
+
       } catch (err) {
-        addDebug(`Camera error: ${err.message}`);
+        log('Camera error: ' + err.message);
         startBtn.disabled = false;
+        startBtn.textContent = 'Start Camera';
       }
     }
 
-    // --- AUDIO SNR LOGGING ---
-    async function startAudioSNRLogging() {
+    async function initMediaPipe() {
+      log('Initializing MediaPipe...');
+
       try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        const audioCtx = new AudioContext();
-        const source = audioCtx.createMediaStreamSource(stream);
+        // Initialize selfie segmentation
+        selfieSegmentation = new SelfieSegmentation({
+          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
+        });
+        selfieSegmentation.setOptions({
+          modelSelection: 1,
+          selfieMode: false
+        });
+        selfieSegmentation.onResults(onSegmentationResults);
 
-        const analyser = audioCtx.createAnalyser();
-        analyser.fftSize = 2048;
-        source.connect(analyser);
+        // Initialize face detection
+        faceDetection = new FaceDetection({
+          locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
+        });
+        faceDetection.setOptions({
+          model: 'short',
+          minDetectionConfidence: 0.5
+        });
+        faceDetection.onResults(onFaceResults);
 
-        const dataArray = new Float32Array(analyser.fftSize);
+        // Initialize persistent mask
+        persistentMask = new Float32Array(MASK_WIDTH * MASK_HEIGHT);
 
-        function computeSNR() {
-          analyser.getFloatTimeDomainData(dataArray);
+        // Start camera processing - face detection always runs
+        camera = new Camera(videoRight, {
+          onFrame: async () => {
+            await faceDetection.send({ image: videoLeft });
+            if (virtualBgEnabled) {
+              await selfieSegmentation.send({ image: videoRight });
+            }
+          },
+          width: 1280,
+          height: 720
+        });
 
-          let signalPower = 0;
-          for (let i = 0; i < dataArray.length; i++) {
-            signalPower += dataArray[i] * dataArray[i];
+        await camera.start();
+        log('✓ MediaPipe initialized');
+        log('✓ Face detection running continuously');
+        log('✓ Persistent mask system ready');
+
+      } catch (err) {
+        log(`MediaPipe error: ${err.message}`);
+      }
+    }
+
+    function onFaceResults(results) {
+      if (!results.detections || results.detections.length === 0) {
+        latestFaces = [];
+        primaryFaceBox = null;
+        return;
+      }
+
+      latestFaces = results.detections;
+
+      // Draw faces on left canvas
+      const ctx = canvasLeft.getContext('2d');
+      canvasLeft.width = videoLeft.videoWidth;
+      canvasLeft.height = videoLeft.videoHeight;
+
+      ctx.clearRect(0, 0, canvasLeft.width, canvasLeft.height);
+      ctx.drawImage(videoLeft, 0, 0);
+
+      // Pick primary face (largest + most central)
+      const videoW = videoLeft.videoWidth;
+      const videoH = videoLeft.videoHeight;
+      const centerX = videoW / 2;
+      const centerY = videoH / 2;
+
+      let bestFace = null;
+      let bestScore = -1;
+
+      for (const detection of results.detections) {
+        const box = detection.boundingBox;
+        const fx = box.xCenter * videoW;
+        const fy = box.yCenter * videoH;
+        const fw = box.width * videoW;
+        const fh = box.height * videoH;
+
+        const distFromCenter = Math.sqrt(
+          Math.pow(fx - centerX, 2) + Math.pow(fy - centerY, 2)
+        );
+
+        const area = fw * fh;
+        const score = area / (1 + distFromCenter * 0.001);
+
+        if (score > bestScore) {
+          bestScore = score;
+          bestFace = { x: fx, y: fy, width: fw, height: fh };
+        }
+
+        // Draw all face boxes
+        ctx.strokeStyle = '#00ff00';
+        ctx.lineWidth = 2;
+        ctx.strokeRect(
+          fx - fw / 2,
+          fy - fh / 2,
+          fw,
+          fh
+        );
+      }
+
+      // Draw primary face in different color
+      if (bestFace) {
+        primaryFaceBox = bestFace;
+        ctx.strokeStyle = '#00bfff';
+        ctx.lineWidth = 3;
+        ctx.strokeRect(
+          bestFace.x - bestFace.width / 2,
+          bestFace.y - bestFace.height / 2,
+          bestFace.width,
+          bestFace.height
+        );
+      }
+
+      // Show left canvas with face boxes
+      canvasLeft.classList.remove('hidden');
+      videoLeft.classList.add('hidden');
+
+      // Alert on multiple faces
+      if (results.detections.length > 1 && Math.random() < 0.1) {
+        showToast(faceToast);
+        log(`⚠️ ${results.detections.length} faces detected`);
+      }
+    }
+
+    function detectMotion(currentFrameData) {
+      if (!previousFrameData) {
+        previousFrameData = new Uint8ClampedArray(currentFrameData);
+        return new Uint8Array(MASK_WIDTH * MASK_HEIGHT);
+      }
+
+      const motionMask = new Uint8Array(MASK_WIDTH * MASK_HEIGHT);
+
+      for (let i = 0; i < currentFrameData.length; i += 4) {
+        const idx = i / 4;
+        const r = Math.abs(currentFrameData[i] - previousFrameData[i]);
+        const g = Math.abs(currentFrameData[i + 1] - previousFrameData[i + 1]);
+        const b = Math.abs(currentFrameData[i + 2] - previousFrameData[i + 2]);
+        const diff = (r + g + b) / 3;
+
+        motionMask[idx] = diff > MOTION_THRESHOLD ? 1 : 0;
+      }
+
+      previousFrameData = new Uint8ClampedArray(currentFrameData);
+      return motionMask;
+    }
+
+    function updatePersistentMask(segmentationMask, motionMask) {
+      for (let i = 0; i < persistentMask.length; i++) {
+        persistentMask[i] *= (1 - MASK_DECAY_RATE);
+      }
+
+      if (primaryFaceBox) {
+        const scaleX = MASK_WIDTH / videoRight.videoWidth;
+        const scaleY = MASK_HEIGHT / videoRight.videoHeight;
+
+        const expandedHeight = primaryFaceBox.height * FACE_REGION_SCALE;
+        const expandedWidth = primaryFaceBox.width * 1.8;
+
+        const regionX = Math.max(0, (primaryFaceBox.x - expandedWidth / 2) * scaleX);
+        const regionY = Math.max(0, (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY);
+        const regionW = Math.min(MASK_WIDTH - regionX, expandedWidth * scaleX);
+        const regionH = Math.min(MASK_HEIGHT - regionY, expandedHeight * scaleY);
+
+        for (let y = Math.floor(regionY); y < Math.floor(regionY + regionH); y++) {
+          for (let x = Math.floor(regionX); x < Math.floor(regionX + regionW); x++) {
+            const idx = y * MASK_WIDTH + x;
+            if (idx >= 0 && idx < persistentMask.length) {
+              if (segmentationMask[idx] > 128) {
+                persistentMask[idx] = Math.min(1.0, persistentMask[idx] + MASK_STRENGTHEN_RATE);
+              }
+            }
           }
-          signalPower /= dataArray.length;
+        }
+      }
 
-          const sorted = [...dataArray].map(Math.abs).sort((a, b) => a - b);
-          const noiseSlice = sorted.slice(0, Math.floor(sorted.length * 0.1));
-          let noisePower = noiseSlice.reduce((sum, v) => sum + v * v, 0) / noiseSlice.length;
-          if (noisePower <= 0) noisePower = 1e-10;
+      for (let i = 0; i < persistentMask.length; i++) {
+        if (motionMask[i] === 1 && persistentMask[i] < 0.3) {
+          persistentMask[i] = 0;
+        }
+      }
+    }
 
-          const snrDb = 10 * Math.log10(signalPower / noisePower);
-          addDebug(`Audio SNR: ${snrDb.toFixed(2)} dB`);
+    function applyPersistentMask(frameData, segmentationMask) {
+      const tempCanvas = document.createElement('canvas');
+      tempCanvas.width = MASK_WIDTH;
+      tempCanvas.height = MASK_HEIGHT;
+      const tempCtx = tempCanvas.getContext('2d');
 
-          if (snrDb < 10) {
-            showToast(snrToast);
+      tempCtx.drawImage(videoRight, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+      tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const maskCanvas = document.createElement('canvas');
+      maskCanvas.width = segmentationMask.width;
+      maskCanvas.height = segmentationMask.height;
+      const maskCtx = maskCanvas.getContext('2d');
+      maskCtx.putImageData(segmentationMask, 0, 0);
+      tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+      const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+      const motionMask = detectMotion(lowResFrame.data);
+      updatePersistentMask(lowResMask.data, motionMask);
+
+      const scaleX = frameData.width / MASK_WIDTH;
+      const scaleY = frameData.height / MASK_HEIGHT;
+
+      for (let y = 0; y < frameData.height; y++) {
+        for (let x = 0; x < frameData.width; x++) {
+          const fullIdx = (y * frameData.width + x) * 4;
+          const lowX = Math.floor(x / scaleX);
+          const lowY = Math.floor(y / scaleY);
+          const lowIdx = lowY * MASK_WIDTH + lowX;
+          const maskValue = persistentMask[lowIdx];
+
+          if (maskValue < 0.1) {
+            frameData.data[fullIdx + 3] = 0;
+          } else if (maskValue < 0.5) {
+            frameData.data[fullIdx + 3] *= maskValue;
+          }
+        }
+      }
+    }
+
+    function onSegmentationResults(results) {
+      if (!virtualBgEnabled) return;
+
+      try {
+        frameCount++;
+
+        const ctx = canvasRight.getContext('2d');
+
+        if (!videoRight.videoWidth || !videoRight.videoHeight) {
+          if (frameCount % 30 === 0) log('Waiting for video...');
+          return;
+        }
+
+        canvasRight.width = videoRight.videoWidth;
+        canvasRight.height = videoRight.videoHeight;
+
+        // Draw blue background first
+        ctx.save();
+        ctx.fillStyle = '#1e3a8a';
+        ctx.fillRect(0, 0, canvasRight.width, canvasRight.height);
+        ctx.restore();
+
+        if (!results.segmentationMask) {
+          if (frameCount % 30 === 0) log('No segmentation mask - showing video');
+          ctx.drawImage(videoRight, 0, 0, canvasRight.width, canvasRight.height);
+          return;
+        }
+
+        if (frameCount === 1) {
+          log('✓ Segmentation active - processing frames');
+        }
+
+        // Get segmentation mask data
+        const maskCanvas = document.createElement('canvas');
+        maskCanvas.width = canvasRight.width;
+        maskCanvas.height = canvasRight.height;
+        const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+        maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+        const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+
+        // Get video frame
+        const tempCanvas = document.createElement('canvas');
+        tempCanvas.width = canvasRight.width;
+        tempCanvas.height = canvasRight.height;
+        const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+        tempCtx.drawImage(videoRight, 0, 0, tempCanvas.width, tempCanvas.height);
+        const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+        // Apply masking
+        if (ghostModeEnabled) {
+          applyPersistentMask(frameData, maskData);
+        } else {
+          // Standard mode - keep person, remove background
+          let personPixels = 0;
+          let backgroundPixels = 0;
+
+          for (let i = 0; i < frameData.data.length; i += 4) {
+            const maskValue = maskData.data[i];
+            if (maskValue < 128) {
+              // Background pixel - make transparent
+              frameData.data[i + 3] = 0;
+              backgroundPixels++;
+            } else {
+              // Person pixel - keep opaque
+              personPixels++;
+            }
+          }
+
+          // Log stats every 60 frames (about once per second)
+          if (frameCount % 60 === 0) {
+            const totalPixels = personPixels + backgroundPixels;
+            const personPercent = ((personPixels / totalPixels) * 100).toFixed(1);
+            log(`Mask stats: ${personPercent}% person, ${(100 - personPercent).toFixed(1)}% background`);
           }
         }
 
-        setInterval(computeSNR, 1000);
-        addDebug("✓ Audio SNR logging started");
+        // Draw masked person over blue background
+        tempCtx.putImageData(frameData, 0, 0);
+        ctx.drawImage(tempCanvas, 0, 0);
+
       } catch (err) {
-        addDebug("Audio error: " + err.message);
+        log(`Segmentation error: ${err.message}`);
+        console.error(err);
       }
     }
 
-    startBtn.addEventListener('click', startVideo);
-    video.addEventListener('play', () => {
-      if (detectionInterval) clearInterval(detectionInterval);
-      if (faceLogInterval) clearInterval(faceLogInterval);
-      
-      detectionInterval = setInterval(runDetection, 1000);
-      faceLogInterval = setInterval(logMaxFaces, 5000);
-      
-      addDebug('Video started. Detection active.');
+    bgToggle.addEventListener('click', () => {
+      if (!stream) {
+        log('⚠️ Start camera first');
+        return;
+      }
+
+      virtualBgEnabled = !virtualBgEnabled;
+      bgToggle.classList.toggle('active', virtualBgEnabled);
+
+      if (virtualBgEnabled) {
+        frameCount = 0;
+        videoRight.classList.add('hidden');
+        canvasRight.classList.remove('hidden');
+        ghostToggle.classList.remove('disabled');
+        log('✓ Virtual background enabled - waiting for frames...');
+      } else {
+        videoRight.classList.remove('hidden');
+        canvasRight.classList.add('hidden');
+        ghostToggle.classList.add('disabled');
+        ghostToggle.classList.remove('active');
+        ghostModeEnabled = false;
+        log('✓ Virtual background disabled');
+      }
+    });
+
+    ghostToggle.addEventListener('click', () => {
+      if (!virtualBgEnabled) return;
+
+      ghostModeEnabled = !ghostModeEnabled;
+      ghostToggle.classList.toggle('active', ghostModeEnabled);
+
+      if (ghostModeEnabled) {
+        persistentMask.fill(0);
+        previousFrameData = null;
+        log('Ghost mode enabled - persistent mask active');
+      } else {
+        log('Ghost mode disabled');
+      }
+    });
+
+    startBtn.addEventListener('click', startCamera);
+
+    window.addEventListener('load', () => {
+      log('Checking browser support...');
+      if (navigator.mediaDevices && navigator.mediaDevices.getUserMedia) {
+        log('✓ Camera API supported');
+      } else {
+        log('ERROR: Camera not supported');
+        startBtn.disabled = true;
+      }
     });
 
     window.addEventListener('beforeunload', () => {
-      if (detectionInterval) clearInterval(detectionInterval);
-      if (faceLogInterval) clearInterval(faceLogInterval);
       if (camera) camera.stop();
-      if (video.srcObject) video.srcObject.getTracks().forEach(track => track.stop());
+      if (stream) stream.getTracks().forEach(track => track.stop());
     });
-
-    async function initialize() {
-      addDebug('Checking browser support...');
-      if (!checkBrowserSupport()) {
-        addDebug('Browser does not support camera access');
-        return;
-      }
-      if (typeof faceapi === 'undefined') {
-        addDebug('Face-api.js failed to load');
-        return;
-      }
-      const modelResult = await loadModels();
-      if (modelResult === 'native') {
-        await initNativeFaceDetection();
-      }
-      startBtn.disabled = false;
-    }
-
-    window.addEventListener('load', initialize);
   </script>
 </body>
 </html>
