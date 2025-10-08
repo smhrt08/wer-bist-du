@@ -260,7 +260,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <p>v6.005</p>
+      <p>v6.006</p>
       <button id="startBtn" class="btn-primary" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -347,14 +347,17 @@
     const MASK_WIDTH = 320;
     const MASK_HEIGHT = 180;
     let persistentMask = null;
+    let shapeMask = null;  // NEW: Defines valid person region
     let previousFrameData = null;
     let primaryFaceBox = null;
-
+    
     // Tuning parameters
-    const MASK_STRENGTHEN_RATE = 0.3;  // How fast to strengthen mask in face region
-    const MASK_DECAY_RATE = 0.02;      // How fast mask decays (allows adaptation)
-    const MOTION_THRESHOLD = 15;       // Sensitivity to motion
-    const FACE_REGION_SCALE = 3.5;     // How much to expand face bbox for body
+    const MASK_STRENGTHEN_RATE = 0.4;  // Faster strengthening
+    const MASK_DECAY_RATE = 0.015;     // Slower decay
+    const MOTION_THRESHOLD = 12;       // Motion sensitivity
+    const FACE_REGION_SCALE = 3.5;     // Body region size
+    const SHAPE_CONSTRAINT_STRENGTH = 0.9;  // How strictly to enforce shape
+    const EDGE_SUPPRESSION = 0.7;      // Suppress edges more aggressively
 
     function addDebug(msg) {
       const timestamp = new Date().toLocaleTimeString();
@@ -540,102 +543,149 @@
     }
 
     function updatePersistentMask(segmentationMask, motionMask) {
-      // Decay the persistent mask slightly (allows adaptation over time)
+      // Decay the persistent mask slightly
       for (let i = 0; i < persistentMask.length; i++) {
         persistentMask[i] *= (1 - MASK_DECAY_RATE);
       }
-
-      // If we have a face, strengthen mask in the face region
+    
+      // Build/update shape mask based on face position
       if (primaryFaceBox) {
         const scaleX = MASK_WIDTH / video.videoWidth;
         const scaleY = MASK_HEIGHT / video.videoHeight;
-
-        // Expand face box to include head + upper body
+    
+        // Define the valid person region (head + upper body)
         const expandedHeight = primaryFaceBox.height * FACE_REGION_SCALE;
         const expandedWidth = primaryFaceBox.width * 1.8;
-
-        const regionX = Math.max(0, (primaryFaceBox.x - expandedWidth / 2) * scaleX);
-        const regionY = Math.max(0, (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY);
+    
+        const centerX = primaryFaceBox.x * scaleX;
+        const centerY = (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY;
+        
+        const regionX = Math.max(0, centerX - (expandedWidth * scaleX) / 2);
+        const regionY = Math.max(0, centerY);
         const regionW = Math.min(MASK_WIDTH - regionX, expandedWidth * scaleX);
         const regionH = Math.min(MASK_HEIGHT - regionY, expandedHeight * scaleY);
-
-        // Strengthen mask in face region where segmentation shows person
+    
+        // Initialize or update shape mask
+        if (!shapeMask) {
+          shapeMask = new Float32Array(MASK_WIDTH * MASK_HEIGHT);
+        }
+    
+        // Create elliptical shape mask centered on face
+        const ellipseCenterX = centerX;
+        const ellipseCenterY = centerY + (expandedHeight * scaleY) / 3; // Slightly below face
+        const ellipseRadiusX = (expandedWidth * scaleX) / 2;
+        const ellipseRadiusY = (expandedHeight * scaleY) / 2;
+    
+        for (let y = 0; y < MASK_HEIGHT; y++) {
+          for (let x = 0; x < MASK_WIDTH; x++) {
+            const idx = y * MASK_WIDTH + x;
+            
+            // Calculate distance from ellipse center (normalized)
+            const dx = (x - ellipseCenterX) / ellipseRadiusX;
+            const dy = (y - ellipseCenterY) / ellipseRadiusY;
+            const distFromCenter = Math.sqrt(dx * dx + dy * dy);
+            
+            // Smooth falloff: 1.0 at center, 0.0 outside ellipse
+            const shapeValue = Math.max(0, Math.min(1, 1.2 - distFromCenter));
+            
+            // Blend with existing shape mask (allows gradual adaptation)
+            shapeMask[idx] = shapeMask[idx] * 0.95 + shapeValue * 0.05;
+          }
+        }
+    
+        // Strengthen mask ONLY within the shape constraint
         for (let y = Math.floor(regionY); y < Math.floor(regionY + regionH); y++) {
           for (let x = Math.floor(regionX); x < Math.floor(regionX + regionW); x++) {
             const idx = y * MASK_WIDTH + x;
             if (idx >= 0 && idx < persistentMask.length) {
-              // If segmentation says "person" in this region, strengthen
-              if (segmentationMask[idx] > 128) {
-                persistentMask[idx] = Math.min(1.0, persistentMask[idx] + MASK_STRENGTHEN_RATE);
+              // Only strengthen if:
+              // 1. Segmentation says "person"
+              // 2. Within valid shape region
+              if (segmentationMask[idx] > 128 && shapeMask[idx] > 0.3) {
+                const strengthenAmount = MASK_STRENGTHEN_RATE * shapeMask[idx];
+                persistentMask[idx] = Math.min(1.0, persistentMask[idx] + strengthenAmount);
               }
             }
           }
         }
       }
-
-      // If motion is detected outside the persistent mask, ensure it stays suppressed
+    
+      // AGGRESSIVE SUPPRESSION: Any motion outside the shape mask is background
       for (let i = 0; i < persistentMask.length; i++) {
-        if (motionMask[i] === 1 && persistentMask[i] < 0.3) {
-          // New motion outside primary person - keep it suppressed
-          persistentMask[i] = 0;
-        }
-      }
-    }
-
-    function applyPersistentMask(frameData, segmentationMask) {
-      // Create low-res versions
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = MASK_WIDTH;
-      tempCanvas.height = MASK_HEIGHT;
-      const tempCtx = tempCanvas.getContext('2d');
-
-      // Downsample video frame for motion detection
-      tempCtx.drawImage(video, 0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
-
-      // Downsample segmentation mask
-      tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = segmentationMask.width;
-      maskCanvas.height = segmentationMask.height;
-      const maskCtx = maskCanvas.getContext('2d');
-      maskCtx.putImageData(segmentationMask, 0, 0);
-      tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
-
-      // Detect motion
-      const motionMask = detectMotion(lowResFrame.data);
-
-      // Update persistent mask
-      updatePersistentMask(lowResMask.data, motionMask);
-
-      // Apply persistent mask to full resolution frame
-      const scaleX = frameData.width / MASK_WIDTH;
-      const scaleY = frameData.height / MASK_HEIGHT;
-
-      for (let y = 0; y < frameData.height; y++) {
-        for (let x = 0; x < frameData.width; x++) {
-          const fullIdx = (y * frameData.width + x) * 4;
-
-          // Map to low-res persistent mask
-          const lowX = Math.floor(x / scaleX);
-          const lowY = Math.floor(y / scaleY);
-          const lowIdx = lowY * MASK_WIDTH + lowX;
-
-          // Apply persistent mask with feathering
-          const maskValue = persistentMask[lowIdx];
-
-          if (maskValue < 0.1) {
-            // Strong suppression - make transparent
-            frameData.data[fullIdx + 3] = 0;
-          } else if (maskValue < 0.5) {
-            // Partial suppression - fade out
-            frameData.data[fullIdx + 3] *= maskValue;
+        if (motionMask[i] === 1) {
+          // Motion detected
+          const shapeStrength = shapeMask ? shapeMask[i] : 0;
+          
+          if (shapeStrength < 0.3) {
+            // Motion outside valid person shape - SUPPRESS HARD
+            persistentMask[i] = 0;
+          } else if (shapeStrength < 0.6) {
+            // Motion at edge of person shape - suppress moderately
+            persistentMask[i] *= EDGE_SUPPRESSION;
           }
-          // else: maskValue >= 0.5, keep fully visible
+          // else: Motion within core person shape - allow it
         }
       }
     }
+
+   function applyPersistentMask(frameData, segmentationMask) {
+  // Create low-res versions
+  const tempCanvas = document.createElement('canvas');
+  tempCanvas.width = MASK_WIDTH;
+  tempCanvas.height = MASK_HEIGHT;
+  const tempCtx = tempCanvas.getContext('2d');
+
+  // Downsample video frame for motion detection
+  tempCtx.drawImage(video, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+  const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+  // Downsample segmentation mask
+  tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
+  const maskCanvas = document.createElement('canvas');
+  maskCanvas.width = segmentationMask.width;
+  maskCanvas.height = segmentationMask.height;
+  const maskCtx = maskCanvas.getContext('2d');
+  maskCtx.putImageData(segmentationMask, 0, 0);
+  tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+  const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+  // Detect motion
+  const motionMask = detectMotion(lowResFrame.data);
+
+  // Update persistent mask with shape constraints
+  updatePersistentMask(lowResMask.data, motionMask);
+
+  // Apply persistent mask to full resolution frame
+  const scaleX = frameData.width / MASK_WIDTH;
+  const scaleY = frameData.height / MASK_HEIGHT;
+
+  for (let y = 0; y < frameData.height; y++) {
+    for (let x = 0; x < frameData.width; x++) {
+      const fullIdx = (y * frameData.width + x) * 4;
+
+      // Map to low-res persistent mask
+      const lowX = Math.floor(x / scaleX);
+      const lowY = Math.floor(y / scaleY);
+      const lowIdx = lowY * MASK_WIDTH + lowX;
+
+      // Get both mask values
+      const maskValue = persistentMask[lowIdx];
+      const shapeValue = shapeMask ? shapeMask[lowIdx] : 1.0;
+
+      // Combine: only show pixels that pass BOTH tests
+      const finalMask = maskValue * (0.3 + 0.7 * shapeValue);
+
+      if (finalMask < 0.15) {
+        // Strong suppression
+        frameData.data[fullIdx + 3] = 0;
+      } else if (finalMask < 0.5) {
+        // Partial suppression with feathering
+        frameData.data[fullIdx + 3] *= finalMask * 2;
+      }
+      // else: Keep fully visible
+    }
+  }
+}
 
     function onSegmentationResults(results) {
       if (!virtualBgEnabled || !ghostModeEnabled) return;
@@ -703,23 +753,23 @@
     }
 
     function toggleGhostMode() {
-      if (!isStarted || !virtualBgEnabled) return;
+  if (!isStarted || !virtualBgEnabled) return;
 
-      ghostModeEnabled = !ghostModeEnabled;
-      ghostToggle.classList.toggle('active', ghostModeEnabled);
-      infoBox.classList.toggle('hidden', !ghostModeEnabled);
+  ghostModeEnabled = !ghostModeEnabled;
+  ghostToggle.classList.toggle('active', ghostModeEnabled);
+  infoBox.classList.toggle('hidden', !ghostModeEnabled);
 
-      if (ghostModeEnabled) {
-        // Reset persistent mask
-        persistentMask.fill(0);
-        previousFrameData = null;
-        addDebug('Ghost mode enabled - persistent mask active');
-        addDebug('Tracking primary person with face-anchored mask');
-      } else {
-        addDebug('Ghost mode disabled');
-      }
-    }
-
+  if (ghostModeEnabled) {
+    // Reset persistent mask and shape mask
+    persistentMask.fill(0);
+    shapeMask = null;  // Will be rebuilt based on face
+    previousFrameData = null;
+    addDebug('Ghost mode enabled - shape-constrained mask active');
+    addDebug('Building anatomical shape model from face detection');
+  } else {
+    addDebug('Ghost mode disabled');
+  }
+}
     startBtn.addEventListener('click', startCamera);
     bgToggle.addEventListener('click', toggleVirtualBackground);
     ghostToggle.addEventListener('click', toggleGhostMode);
