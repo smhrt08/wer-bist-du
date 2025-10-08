@@ -247,11 +247,11 @@
 <body>
   <div class="header">
     <h1>wer bist du</h1>
-    <h3>v4.005</h3>
+    <h3>v4.006</h3>
     <button id="startBtn" disabled>Start Camera</button>
   </div>
   
-  <div class="main-container">
+  <!-- <div class="main-container">
     <div class="left-panel">
       <div class="video-container">
         <video id="video" width="640" height="480" autoplay muted playsinline></video>
@@ -278,7 +278,37 @@
     <div class="right-panel">
       <div id="debug" height="480"></div>
     </div>
-  </div>
+  </div> -->
+
+  <div class="video-row">
+      <!-- Left: Face Detection -->
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Face Detection View</h3>
+        <div class="video-container">
+          <video id="videoLeft" autoplay muted playsinline></video>
+          <canvas id="canvasFaces"></canvas>
+        </div>
+      </div>
+
+      <!-- Right: Background Isolation -->
+      <div class="card">
+        <h3 style="margin-bottom:0.5rem; color:#1e3a8a;">Background Isolation View</h3>
+        <div class="video-container">
+          <video id="videoRight" autoplay muted playsinline></video>
+          <canvas id="outputCanvas" class="hidden"></canvas>
+        </div>
+        <div class="controls">
+          <div id="bgToggle" class="toggle"><div class="toggle-slider"></div></div>
+          <div id="ghostToggle" class="toggle"><div class="toggle-slider"></div></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Debug below -->
+    <div class="debug-panel">
+      <h2>Debug Log</h2>
+      <div id="debugLog" class="debug-log"></div>
+    </div>
 
   <div id="faceToast" class="toast">
     <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" style="width: 24px; height: 24px; aspect-ratio: 1/1; flex-shrink: 0;">
