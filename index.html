@@ -260,7 +260,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <p>v6.003</p>
+      <p>v6.004</p>
       <button id="startBtn" class="btn-primary" disabled>
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/>
@@ -626,20 +626,27 @@
 
     function onSegmentationResults(results) {
       if (!virtualBgEnabled) return;
-
+    
       const ctx = canvas.getContext('2d');
       canvas.width = video.videoWidth;
       canvas.height = video.videoHeight;
-
+    
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       ctx.fillStyle = '#1e3a8a';
       ctx.fillRect(0, 0, canvas.width, canvas.height);
-
+    
+      // If ghost mode is NOT enabled, just draw the video directly
+      if (!ghostModeEnabled) {
+        ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
+        return;
+      }
+    
+      // Ghost mode is enabled - apply masking
       if (!results.segmentationMask) {
         ctx.drawImage(video, 0, 0, canvas.width, canvas.height);
         return;
       }
-
+    
       // Get segmentation mask
       const maskCanvas = document.createElement('canvas');
       maskCanvas.width = canvas.width;
@@ -647,7 +654,7 @@
       const maskCtx = maskCanvas.getContext('2d');
       maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
       const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-
+    
       // Get video frame
       const tempCanvas = document.createElement('canvas');
       tempCanvas.width = canvas.width;
@@ -655,23 +662,10 @@
       const tempCtx = tempCanvas.getContext('2d');
       tempCtx.drawImage(video, 0, 0, tempCanvas.width, tempCanvas.height);
       const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-
-      if (ghostModeEnabled) {
-        // Use persistent mask system
-        applyPersistentMask(frameData, maskData);
-      } else {
-        // Standard mode - apply segmentation mask
-        for (let i = 0; i < frameData.data.length; i += 4) {
-          const pixelIndex = i / 4;
-          // Use the mask value directly (it's already 0-255)
-          if (maskData.data[pixelIndex * 4] < 128) {
-            // Background - make transparent
-            frameData.data[i + 3] = 0;
-          }
-        }
-      }
-      
-      // Draw the processed frame
+    
+      // Use persistent mask system
+      applyPersistentMask(frameData, maskData);
+    
       tempCtx.putImageData(frameData, 0, 0);
       ctx.drawImage(tempCanvas, 0, 0);
     }
