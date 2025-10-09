@@ -207,7 +207,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.012</h3>
+      <h3>v4.013</h3>
       <button id="startBtn">Start Camera</button>
     </div>
 
@@ -281,6 +281,8 @@
     let latestFaces = [];
     let frameCount = 0;
     let lastFaceCount = 0; 
+    let maxFacesInPeriod = 0;
+    let faceLogInterval = null;
 
     const MASK_WIDTH = 320;
     const MASK_HEIGHT = 180;
@@ -445,14 +447,19 @@
       videoLeft.classList.add('hidden');
     
       const faceCount = latestFaces.length;
-      if (faceCount !== lastFaceCount) {
-        lastFaceCount = faceCount;
-        log(`Faces detected: ${faceCount}`);
-        if (faceCount > 1) {
-          showToast(faceToast);
-          log(`⚠️ ${faceCount} faces detected`);
-        }
+      
+      // Track the maximum number of faces within the current 5-second window
+      if (faceCount > maxFacesInPeriod) {
+        maxFacesInPeriod = faceCount;
       }
+      
+      // Optionally show a warning toast if multiple faces appear immediately
+      if (faceCount > 1 && faceCount !== lastFaceCount) {
+        showToast(faceToast);
+      }
+      
+      // Remember last count (for change detection)
+      lastFaceCount = faceCount;
     }
 
     function detectMotion(currentFrameData) {
@@ -721,6 +728,16 @@
         console.error(err);
       }
     }
+
+    function logMaxFacesPeriodically() {
+      if (faceLogInterval) clearInterval(faceLogInterval);
+      faceLogInterval = setInterval(() => {
+        log(`Max faces detected in last 5 seconds: ${maxFacesInPeriod}`);
+        maxFacesInPeriod = 0; 
+      }, 5000);
+    }
+    
+    logMaxFacesPeriodically();
 
     bgToggle.addEventListener('click', () => {
       if (!stream) {
