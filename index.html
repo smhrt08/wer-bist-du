@@ -207,7 +207,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.010</h3>
+      <h3>v4.011</h3>
       <button id="startBtn">Start Camera</button>
     </div>
 
@@ -280,8 +280,8 @@
     let camera = null;
     let latestFaces = [];
     let frameCount = 0;
+    let lastFaceCount = 0; 
 
-    // Persistent mask system
     const MASK_WIDTH = 320;
     const MASK_HEIGHT = 180;
     let persistentMask = null;
@@ -339,7 +339,6 @@
       log('Initializing MediaPipe...');
 
       try {
-        // Initialize selfie segmentation
         selfieSegmentation = new SelfieSegmentation({
           locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/selfie_segmentation/${f}`
         });
@@ -349,7 +348,6 @@
         });
         selfieSegmentation.onResults(onSegmentationResults);
 
-        // Initialize face detection
         faceDetection = new FaceDetection({
           locateFile: (f) => `https://cdn.jsdelivr.net/npm/@mediapipe/face_detection/${f}`
         });
@@ -359,10 +357,8 @@
         });
         faceDetection.onResults(onFaceResults);
 
-        // Initialize persistent mask
         persistentMask = new Float32Array(MASK_WIDTH * MASK_HEIGHT);
 
-        // Start camera processing - face detection always runs
         camera = new Camera(videoRight, {
           onFrame: async () => {
             await faceDetection.send({ image: videoLeft });
@@ -385,51 +381,42 @@
     }
 
     function onFaceResults(results) {
-      if (!results.detections || results.detections.length === 0) {
-        latestFaces = [];
-        primaryFaceBox = null;
-        return;
-      }
-
-      latestFaces = results.detections;
-
-      // Draw faces on left canvas
+      latestFaces = results.detections || [];
+    
       const ctx = canvasLeft.getContext('2d');
       canvasLeft.width = videoLeft.videoWidth;
       canvasLeft.height = videoLeft.videoHeight;
-
+    
       ctx.clearRect(0, 0, canvasLeft.width, canvasLeft.height);
       ctx.drawImage(videoLeft, 0, 0);
-
-      // Pick primary face (largest + most central)
+    
       const videoW = videoLeft.videoWidth;
       const videoH = videoLeft.videoHeight;
       const centerX = videoW / 2;
       const centerY = videoH / 2;
-
+    
       let bestFace = null;
       let bestScore = -1;
-
-      for (const detection of results.detections) {
+    
+      for (const detection of latestFaces) {
         const box = detection.boundingBox;
         const fx = box.xCenter * videoW;
         const fy = box.yCenter * videoH;
         const fw = box.width * videoW;
         const fh = box.height * videoH;
-
+    
         const distFromCenter = Math.sqrt(
           Math.pow(fx - centerX, 2) + Math.pow(fy - centerY, 2)
         );
-
+    
         const area = fw * fh;
         const score = area / (1 + distFromCenter * 0.001);
-
+    
         if (score > bestScore) {
           bestScore = score;
           bestFace = { x: fx, y: fy, width: fw, height: fh };
         }
-
-        // Draw all face boxes
+    
         ctx.strokeStyle = '#00ff00';
         ctx.lineWidth = 2;
         ctx.strokeRect(
@@ -439,8 +426,7 @@
           fh
         );
       }
-
-      // Draw primary face in different color
+    
       if (bestFace) {
         primaryFaceBox = bestFace;
         ctx.strokeStyle = '#00bfff';
@@ -451,16 +437,21 @@
           bestFace.width,
           bestFace.height
         );
+      } else {
+        primaryFaceBox = null;
       }
-
-      // Show left canvas with face boxes
+    
       canvasLeft.classList.remove('hidden');
       videoLeft.classList.add('hidden');
-
-      // Alert on multiple faces
-      if (results.detections.length > 1 && Math.random() < 0.1) {
-        showToast(faceToast);
-        log(`⚠️ ${results.detections.length} faces detected`);
+    
+      const faceCount = latestFaces.length;
+      if (faceCount !== lastFaceCount) {
+        lastFaceCount = faceCount;
+        log(`Faces detected: ${faceCount}`);
+        if (faceCount > 1) {
+          showToast(faceToast);
+          log(`⚠️ ${faceCount} faces detected`);
+        }
       }
     }
 
@@ -493,11 +484,13 @@
       const centerX = width / 2;
       const centerY = height / 2;
     
+      // Build binary person mask from (blurred) segmentation
       const personMask = new Uint8Array(width * height);
       for (let i = 0; i < maskData.data.length; i += 4) {
         personMask[i / 4] = maskData.data[i] > 128 ? 1 : 0;
       }
     
+      // Connected components
       const visited = new Uint8Array(width * height);
       const components = [];
     
@@ -507,19 +500,32 @@
           if (personMask[idx] === 1 && visited[idx] === 0) {
             const component = floodFill(personMask, visited, x, y, width, height);
             if (component.length > 500) {
-              const sumX = component.reduce((sum, idx) => sum + (idx % width), 0);
-              const sumY = component.reduce((sum, idx) => sum + Math.floor(idx / width), 0);
+              // compute bbox and center for this component
+              let minX = width, minY = height, maxX = 0, maxY = 0;
+              let sumX = 0, sumY = 0;
+              for (const pIdx of component) {
+                const px = pIdx % width;
+                const py = Math.floor(pIdx / width);
+                if (px < minX) minX = px;
+                if (py < minY) minY = py;
+                if (px > maxX) maxX = px;
+                if (py > maxY) maxY = py;
+                sumX += px;
+                sumY += py;
+              }
               components.push({
                 pixels: component,
                 centerX: sumX / component.length,
                 centerY: sumY / component.length,
-                size: component.length
+                size: component.length,
+                minX, minY, maxX, maxY
               });
             }
           }
         }
       }
     
+      // If no components -> hide everything
       if (components.length === 0) {
         for (let i = 0; i < frameData.data.length; i += 4) {
           frameData.data[i + 3] = 0;
@@ -527,35 +533,100 @@
         return;
       }
     
+      // Select primary component:
       let primaryComponent = components[0];
-      let bestScore = 0;
     
-      for (const comp of components) {
-        const distFromCenter = Math.sqrt(
-          Math.pow(comp.centerX - centerX, 2) +
-          Math.pow(comp.centerY - centerY, 2)
-        );
-        const score = comp.size / (1 + distFromCenter * 0.01);
-        if (score > bestScore) {
-          bestScore = score;
-          primaryComponent = comp;
+      if (primaryFaceBox && videoRight.videoWidth && videoRight.videoHeight) {
+        // Convert primaryFaceBox (video coords) to mask coords
+        const scaleX = width / videoRight.videoWidth;
+        const scaleY = height / videoRight.videoHeight;
+    
+        const faceMinX = Math.max(0, Math.floor((primaryFaceBox.x - primaryFaceBox.width / 2) * scaleX));
+        const faceMinY = Math.max(0, Math.floor((primaryFaceBox.y - primaryFaceBox.height / 2) * scaleY));
+        const faceMaxX = Math.min(width - 1, Math.ceil((primaryFaceBox.x + primaryFaceBox.width / 2) * scaleX));
+        const faceMaxY = Math.min(height - 1, Math.ceil((primaryFaceBox.y + primaryFaceBox.height / 2) * scaleY));
+        const faceCenterX = (faceMinX + faceMaxX) / 2;
+        const faceCenterY = (faceMinY + faceMaxY) / 2;
+    
+        // find component with maximum bounding-box overlap with face box
+        let bestOverlap = 0;
+        let bestIdx = -1;
+        for (let i = 0; i < components.length; i++) {
+          const comp = components[i];
+          const overlapW = Math.max(0, Math.min(comp.maxX, faceMaxX) - Math.max(comp.minX, faceMinX) + 1);
+          const overlapH = Math.max(0, Math.min(comp.maxY, faceMaxY) - Math.max(comp.minY, faceMinY) + 1);
+          const overlapArea = overlapW * overlapH;
+          if (overlapArea > bestOverlap) {
+            bestOverlap = overlapArea;
+            bestIdx = i;
+          }
+        }
+    
+        if (bestIdx >= 0) {
+          primaryComponent = components[bestIdx];
+        } else {
+          // fallback — choose component whose center is closest to the face center
+          let bestDist = Infinity;
+          for (const comp of components) {
+            const dist = Math.hypot(comp.centerX - faceCenterX, comp.centerY - faceCenterY);
+            if (dist < bestDist) {
+              bestDist = dist;
+              primaryComponent = comp;
+            }
+          }
+        }
+      } else {
+        // fallback: choose by size + center proximity (existing heuristic)
+        let bestScore = -Infinity;
+        for (const comp of components) {
+          const distFromCenter = Math.hypot(comp.centerX - centerX, comp.centerY - centerY);
+          const score = comp.size / (1 + distFromCenter * 0.01);
+          if (score > bestScore) {
+            bestScore = score;
+            primaryComponent = comp;
+          }
         }
       }
     
+      // Build a primary mask from the chosen component (and dilate slightly)
       const primaryMask = new Uint8Array(width * height);
       for (const idx of primaryComponent.pixels) {
         primaryMask[idx] = 1;
       }
     
+      // Small dilation to make mask robust when objects touch edges
+      const dilationRadius = 2;
+      if (dilationRadius > 0) {
+        const dilated = new Uint8Array(width * height);
+        for (let p = 0; p < width * height; p++) {
+          if (primaryMask[p]) {
+            const px = p % width;
+            const py = Math.floor(p / width);
+            for (let dy = -dilationRadius; dy <= dilationRadius; dy++) {
+              for (let dx = -dilationRadius; dx <= dilationRadius; dx++) {
+                const nx = px + dx;
+                const ny = py + dy;
+                if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+                  dilated[ny * width + nx] = 1;
+                }
+              }
+            }
+          }
+        }
+        primaryMask.set(dilated);
+      }
+    
+      // Apply primaryMask to frameData (hide pixels not in primary mask)
       for (let i = 0; i < frameData.data.length; i += 4) {
         if (primaryMask[i / 4] === 0) {
           frameData.data[i + 3] = 0;
         }
       }
     
-      if (components.length > 1 && Math.random() < 0.1) {
-        log(`Ghost Mode: ${components.length} people detected, showing primary only`);
-        showToast(`${components.length} people detected - hiding distractions`, 'warning');
+      // Use faceDetection results for "multiple people" logging (more reliable)
+      if (latestFaces && latestFaces.length > 1) {
+        log(`Ghost Mode: ${latestFaces.length} faces detected, showing primary only`);
+        showToast(`${latestFaces.length} people detected - hiding distractions`, 'warning');
       }
     }
     
