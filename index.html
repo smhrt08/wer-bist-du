@@ -207,7 +207,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.011</h3>
+      <h3>v4.012</h3>
       <button id="startBtn">Start Camera</button>
     </div>
 
@@ -499,7 +499,7 @@
           const idx = y * width + x;
           if (personMask[idx] === 1 && visited[idx] === 0) {
             const component = floodFill(personMask, visited, x, y, width, height);
-            if (component.length > 500) {
+            if (component.length > 1000) {
               // compute bbox and center for this component
               let minX = width, minY = height, maxX = 0, maxY = 0;
               let sumX = 0, sumY = 0;
@@ -595,7 +595,7 @@
       }
     
       // Small dilation to make mask robust when objects touch edges
-      const dilationRadius = 2;
+      const dilationRadius = 4;
       if (dilationRadius > 0) {
         const dilated = new Uint8Array(width * height);
         for (let p = 0; p < width * height; p++) {
