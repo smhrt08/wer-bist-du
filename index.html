@@ -207,7 +207,7 @@
   <div class="container">
     <div class="header">
       <h1>wer bist du</h1>
-      <h3>v4.009</h3>
+      <h3>v4.010</h3>
       <button id="startBtn">Start Camera</button>
     </div>
 
@@ -486,123 +486,221 @@
       return motionMask;
     }
 
-    function updatePersistentMask(segmentationMask, motionMask) {
-      for (let i = 0; i < persistentMask.length; i++) {
-        persistentMask[i] *= (1 - MASK_DECAY_RATE);
+    // changes here ---
+    function identifyPrimaryPerson(maskData, frameData) {
+      const width = maskData.width;
+      const height = maskData.height;
+      const centerX = width / 2;
+      const centerY = height / 2;
+    
+      const personMask = new Uint8Array(width * height);
+      for (let i = 0; i < maskData.data.length; i += 4) {
+        personMask[i / 4] = maskData.data[i] > 128 ? 1 : 0;
       }
-
-      if (primaryFaceBox) {
-        const scaleX = MASK_WIDTH / videoRight.videoWidth;
-        const scaleY = MASK_HEIGHT / videoRight.videoHeight;
-
-        const expandedHeight = primaryFaceBox.height * FACE_REGION_SCALE;
-        const expandedWidth = primaryFaceBox.width * 1.8;
-
-        const regionX = Math.max(0, (primaryFaceBox.x - expandedWidth / 2) * scaleX);
-        const regionY = Math.max(0, (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY);
-        const regionW = Math.min(MASK_WIDTH - regionX, expandedWidth * scaleX);
-        const regionH = Math.min(MASK_HEIGHT - regionY, expandedHeight * scaleY);
-
-        for (let y = Math.floor(regionY); y < Math.floor(regionY + regionH); y++) {
-          for (let x = Math.floor(regionX); x < Math.floor(regionX + regionW); x++) {
-            const idx = y * MASK_WIDTH + x;
-            if (idx >= 0 && idx < persistentMask.length) {
-              if (segmentationMask[idx] > 128) {
-                persistentMask[idx] = Math.min(1.0, persistentMask[idx] + MASK_STRENGTHEN_RATE);
-              }
+    
+      const visited = new Uint8Array(width * height);
+      const components = [];
+    
+      for (let y = 0; y < height; y++) {
+        for (let x = 0; x < width; x++) {
+          const idx = y * width + x;
+          if (personMask[idx] === 1 && visited[idx] === 0) {
+            const component = floodFill(personMask, visited, x, y, width, height);
+            if (component.length > 500) {
+              const sumX = component.reduce((sum, idx) => sum + (idx % width), 0);
+              const sumY = component.reduce((sum, idx) => sum + Math.floor(idx / width), 0);
+              components.push({
+                pixels: component,
+                centerX: sumX / component.length,
+                centerY: sumY / component.length,
+                size: component.length
+              });
             }
           }
         }
       }
-
-      for (let i = 0; i < persistentMask.length; i++) {
-        if (motionMask[i] === 1 && persistentMask[i] < 0.3) {
-          persistentMask[i] = 0;
+    
+      if (components.length === 0) {
+        for (let i = 0; i < frameData.data.length; i += 4) {
+          frameData.data[i + 3] = 0;
+        }
+        return;
+      }
+    
+      let primaryComponent = components[0];
+      let bestScore = 0;
+    
+      for (const comp of components) {
+        const distFromCenter = Math.sqrt(
+          Math.pow(comp.centerX - centerX, 2) +
+          Math.pow(comp.centerY - centerY, 2)
+        );
+        const score = comp.size / (1 + distFromCenter * 0.01);
+        if (score > bestScore) {
+          bestScore = score;
+          primaryComponent = comp;
         }
       }
-    }
-
-    function applyPersistentMask(frameData, segmentationMask) {
-      const tempCanvas = document.createElement('canvas');
-      tempCanvas.width = MASK_WIDTH;
-      tempCanvas.height = MASK_HEIGHT;
-      const tempCtx = tempCanvas.getContext('2d');
-
-      tempCtx.drawImage(videoRight, 0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
-
-      tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const maskCanvas = document.createElement('canvas');
-      maskCanvas.width = segmentationMask.width;
-      maskCanvas.height = segmentationMask.height;
-      const maskCtx = maskCanvas.getContext('2d');
-      maskCtx.putImageData(segmentationMask, 0, 0);
-      tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
-      const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
-
-      const motionMask = detectMotion(lowResFrame.data);
-      updatePersistentMask(lowResMask.data, motionMask);
-
-      const scaleX = frameData.width / MASK_WIDTH;
-      const scaleY = frameData.height / MASK_HEIGHT;
-
-      for (let y = 0; y < frameData.height; y++) {
-        for (let x = 0; x < frameData.width; x++) {
-          const fullIdx = (y * frameData.width + x) * 4;
-          const lowX = Math.floor(x / scaleX);
-          const lowY = Math.floor(y / scaleY);
-          const lowIdx = lowY * MASK_WIDTH + lowX;
-          const maskValue = persistentMask[lowIdx];
-
-          if (maskValue < 0.1) {
-            frameData.data[fullIdx + 3] = 0;
-          } else if (maskValue < 0.5) {
-            frameData.data[fullIdx + 3] *= maskValue;
-          }
+    
+      const primaryMask = new Uint8Array(width * height);
+      for (const idx of primaryComponent.pixels) {
+        primaryMask[idx] = 1;
+      }
+    
+      for (let i = 0; i < frameData.data.length; i += 4) {
+        if (primaryMask[i / 4] === 0) {
+          frameData.data[i + 3] = 0;
         }
       }
+    
+      if (components.length > 1 && Math.random() < 0.1) {
+        log(`Ghost Mode: ${components.length} people detected, showing primary only`);
+        showToast(`${components.length} people detected - hiding distractions`, 'warning');
+      }
     }
+    
+    function floodFill(mask, visited, startX, startY, width, height) {
+      const component = [];
+      const stack = [[startX, startY]];
+    
+      while (stack.length > 0) {
+        const [x, y] = stack.pop();
+        const idx = y * width + x;
+    
+        if (x < 0 || x >= width || y < 0 || y >= height) continue;
+        if (visited[idx] === 1 || mask[idx] === 0) continue;
+    
+        visited[idx] = 1;
+        component.push(idx);
+    
+        stack.push([x + 1, y], [x - 1, y], [x, y + 1], [x, y - 1]);
+      }
+    
+      return component;
+    }
+
+    // to here --- 
+
+    // function updatePersistentMask(segmentationMask, motionMask) {
+    //   for (let i = 0; i < persistentMask.length; i++) {
+    //     persistentMask[i] *= (1 - MASK_DECAY_RATE);
+    //   }
+
+    //   if (primaryFaceBox) {
+    //     const scaleX = MASK_WIDTH / videoRight.videoWidth;
+    //     const scaleY = MASK_HEIGHT / videoRight.videoHeight;
+
+    //     const expandedHeight = primaryFaceBox.height * FACE_REGION_SCALE;
+    //     const expandedWidth = primaryFaceBox.width * 1.8;
+
+    //     const regionX = Math.max(0, (primaryFaceBox.x - expandedWidth / 2) * scaleX);
+    //     const regionY = Math.max(0, (primaryFaceBox.y - primaryFaceBox.height * 0.5) * scaleY);
+    //     const regionW = Math.min(MASK_WIDTH - regionX, expandedWidth * scaleX);
+    //     const regionH = Math.min(MASK_HEIGHT - regionY, expandedHeight * scaleY);
+
+    //     for (let y = Math.floor(regionY); y < Math.floor(regionY + regionH); y++) {
+    //       for (let x = Math.floor(regionX); x < Math.floor(regionX + regionW); x++) {
+    //         const idx = y * MASK_WIDTH + x;
+    //         if (idx >= 0 && idx < persistentMask.length) {
+    //           if (segmentationMask[idx] > 128) {
+    //             persistentMask[idx] = Math.min(1.0, persistentMask[idx] + MASK_STRENGTHEN_RATE);
+    //           }
+    //         }
+    //       }
+    //     }
+    //   }
+
+    //   for (let i = 0; i < persistentMask.length; i++) {
+    //     if (motionMask[i] === 1 && persistentMask[i] < 0.3) {
+    //       persistentMask[i] = 0;
+    //     }
+    //   }
+    // }
+
+    // function applyPersistentMask(frameData, segmentationMask) {
+    //   const tempCanvas = document.createElement('canvas');
+    //   tempCanvas.width = MASK_WIDTH;
+    //   tempCanvas.height = MASK_HEIGHT;
+    //   const tempCtx = tempCanvas.getContext('2d');
+
+    //   tempCtx.drawImage(videoRight, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+    //   const lowResFrame = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+    //   tempCtx.clearRect(0, 0, MASK_WIDTH, MASK_HEIGHT);
+    //   const maskCanvas = document.createElement('canvas');
+    //   maskCanvas.width = segmentationMask.width;
+    //   maskCanvas.height = segmentationMask.height;
+    //   const maskCtx = maskCanvas.getContext('2d');
+    //   maskCtx.putImageData(segmentationMask, 0, 0);
+    //   tempCtx.drawImage(maskCanvas, 0, 0, MASK_WIDTH, MASK_HEIGHT);
+    //   const lowResMask = tempCtx.getImageData(0, 0, MASK_WIDTH, MASK_HEIGHT);
+
+    //   const motionMask = detectMotion(lowResFrame.data);
+    //   updatePersistentMask(lowResMask.data, motionMask);
+
+    //   const scaleX = frameData.width / MASK_WIDTH;
+    //   const scaleY = frameData.height / MASK_HEIGHT;
+
+    //   for (let y = 0; y < frameData.height; y++) {
+    //     for (let x = 0; x < frameData.width; x++) {
+    //       const fullIdx = (y * frameData.width + x) * 4;
+    //       const lowX = Math.floor(x / scaleX);
+    //       const lowY = Math.floor(y / scaleY);
+    //       const lowIdx = lowY * MASK_WIDTH + lowX;
+    //       const maskValue = persistentMask[lowIdx];
+
+    //       if (maskValue < 0.1) {
+    //         frameData.data[fullIdx + 3] = 0;
+    //       } else if (maskValue < 0.5) {
+    //         frameData.data[fullIdx + 3] *= maskValue;
+    //       }
+    //     }
+    //   }
+    // }
 
     function onSegmentationResults(results) {
       if (!virtualBgEnabled) return;
-
+    
       try {
         frameCount++;
-
+    
         const ctx = canvasRight.getContext('2d');
-
+    
         if (!videoRight.videoWidth || !videoRight.videoHeight) {
           if (frameCount % 30 === 0) log('Waiting for video...');
           return;
         }
-
+    
         canvasRight.width = videoRight.videoWidth;
         canvasRight.height = videoRight.videoHeight;
-
+    
         // Draw blue background first
         ctx.save();
         ctx.fillStyle = '#1e3a8a';
         ctx.fillRect(0, 0, canvasRight.width, canvasRight.height);
         ctx.restore();
-
+    
         if (!results.segmentationMask) {
           if (frameCount % 30 === 0) log('No segmentation mask - showing video');
           ctx.drawImage(videoRight, 0, 0, canvasRight.width, canvasRight.height);
           return;
         }
-
+    
         if (frameCount === 1) {
           log('✓ Segmentation active - processing frames');
         }
-
-        // Get segmentation mask data
+    
+        // Get segmentation mask data with blur for smoother edges
         const maskCanvas = document.createElement('canvas');
         maskCanvas.width = canvasRight.width;
         maskCanvas.height = canvasRight.height;
         const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+        
+        // Apply blur filter for smoother mask edges
+        maskCtx.filter = 'blur(2px)';
         maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
         const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
-
+    
         // Get video frame
         const tempCanvas = document.createElement('canvas');
         tempCanvas.width = canvasRight.width;
@@ -610,44 +708,113 @@
         const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
         tempCtx.drawImage(videoRight, 0, 0, tempCanvas.width, tempCanvas.height);
         const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-
+    
         // Apply masking
         if (ghostModeEnabled) {
-          applyPersistentMask(frameData, maskData);
+          identifyPrimaryPerson(maskData, frameData);
         } else {
-          // Standard mode - keep person, remove background
-          let personPixels = 0;
-          let backgroundPixels = 0;
-
+          // Standard mode - use alpha blending for smoother edges
           for (let i = 0; i < frameData.data.length; i += 4) {
-            const maskValue = maskData.data[i];
-            if (maskValue < 128) {
-              // Background pixel - make transparent
-              frameData.data[i + 3] = 0;
-              backgroundPixels++;
-            } else {
-              // Person pixel - keep opaque
-              personPixels++;
-            }
-          }
-
-          // Log stats every 60 frames (about once per second)
-          if (frameCount % 60 === 0) {
-            const totalPixels = personPixels + backgroundPixels;
-            const personPercent = ((personPixels / totalPixels) * 100).toFixed(1);
-            log(`Mask stats: ${personPercent}% person, ${(100 - personPercent).toFixed(1)}% background`);
+            const alpha = maskData.data[i] / 255; // Convert blurred mask to 0-1
+            frameData.data[i + 3] = frameData.data[i + 3] * alpha;
           }
         }
-
+    
         // Draw masked person over blue background
         tempCtx.putImageData(frameData, 0, 0);
         ctx.drawImage(tempCanvas, 0, 0);
-
+    
       } catch (err) {
         log(`Segmentation error: ${err.message}`);
         console.error(err);
       }
     }
+
+    // function onSegmentationResults(results) {
+    //   if (!virtualBgEnabled) return;
+
+    //   try {
+    //     frameCount++;
+
+    //     const ctx = canvasRight.getContext('2d');
+
+    //     if (!videoRight.videoWidth || !videoRight.videoHeight) {
+    //       if (frameCount % 30 === 0) log('Waiting for video...');
+    //       return;
+    //     }
+
+    //     canvasRight.width = videoRight.videoWidth;
+    //     canvasRight.height = videoRight.videoHeight;
+
+    //     // Draw blue background first
+    //     ctx.save();
+    //     ctx.fillStyle = '#1e3a8a';
+    //     ctx.fillRect(0, 0, canvasRight.width, canvasRight.height);
+    //     ctx.restore();
+
+    //     if (!results.segmentationMask) {
+    //       if (frameCount % 30 === 0) log('No segmentation mask - showing video');
+    //       ctx.drawImage(videoRight, 0, 0, canvasRight.width, canvasRight.height);
+    //       return;
+    //     }
+
+    //     if (frameCount === 1) {
+    //       log('✓ Segmentation active - processing frames');
+    //     }
+
+    //     // Get segmentation mask data
+    //     const maskCanvas = document.createElement('canvas');
+    //     maskCanvas.width = canvasRight.width;
+    //     maskCanvas.height = canvasRight.height;
+    //     const maskCtx = maskCanvas.getContext('2d', { willReadFrequently: true });
+    //     maskCtx.drawImage(results.segmentationMask, 0, 0, maskCanvas.width, maskCanvas.height);
+    //     const maskData = maskCtx.getImageData(0, 0, maskCanvas.width, maskCanvas.height);
+
+    //     // Get video frame
+    //     const tempCanvas = document.createElement('canvas');
+    //     tempCanvas.width = canvasRight.width;
+    //     tempCanvas.height = canvasRight.height;
+    //     const tempCtx = tempCanvas.getContext('2d', { willReadFrequently: true });
+    //     tempCtx.drawImage(videoRight, 0, 0, tempCanvas.width, tempCanvas.height);
+    //     const frameData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
+
+    //     // Apply masking
+    //     if (ghostModeEnabled) {
+    //       applyPersistentMask(frameData, maskData);
+    //     } else {
+    //       // Standard mode - keep person, remove background
+    //       let personPixels = 0;
+    //       let backgroundPixels = 0;
+
+    //       for (let i = 0; i < frameData.data.length; i += 4) {
+    //         const maskValue = maskData.data[i];
+    //         if (maskValue < 128) {
+    //           // Background pixel - make transparent
+    //           frameData.data[i + 3] = 0;
+    //           backgroundPixels++;
+    //         } else {
+    //           // Person pixel - keep opaque
+    //           personPixels++;
+    //         }
+    //       }
+
+    //       // Log stats every 60 frames (about once per second)
+    //       if (frameCount % 60 === 0) {
+    //         const totalPixels = personPixels + backgroundPixels;
+    //         const personPercent = ((personPixels / totalPixels) * 100).toFixed(1);
+    //         log(`Mask stats: ${personPercent}% person, ${(100 - personPercent).toFixed(1)}% background`);
+    //       }
+    //     }
+
+    //     // Draw masked person over blue background
+    //     tempCtx.putImageData(frameData, 0, 0);
+    //     ctx.drawImage(tempCanvas, 0, 0);
+
+    //   } catch (err) {
+    //     log(`Segmentation error: ${err.message}`);
+    //     console.error(err);
+    //   }
+    // }
 
     bgToggle.addEventListener('click', () => {
       if (!stream) {
