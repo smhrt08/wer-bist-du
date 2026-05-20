@@ -1,0 +1,1162 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Propio ONE — Imprivata Integration POC</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    /* ─── Design Tokens ─────────────────────────────────────────── */
+    :root {
+      --primary:        #16335f;
+      --secondary:      #1dd4d7;
+      --tertiary:       #b8e3ec;
+      --success:        #2dd36f;
+      --warning:        #fede45;
+      --danger:         #b30000;
+      --bg-page:        #f2f4f5;
+      --bg-nav:         #eef1f5;
+      --bg-search:      #e1edf9;
+      --text-dark:      #343a40;
+      --text-medium:    #607d8b;
+      --border:         #ccc;
+      --white:          #ffffff;
+      --hover-bg:       rgba(22, 51, 95, 0.08);
+      --active-bg:      rgba(22, 51, 95, 0.18);
+      --shadow-sm:      0 1px 4px rgba(0,0,0,0.10);
+      --shadow-md:      0 4px 16px rgba(0,0,0,0.14);
+      --shadow-lg:      0 8px 32px rgba(0,0,0,0.18);
+      --radius-sm:      6px;
+      --radius-md:      10px;
+      --radius-lg:      16px;
+      --panel-width:    360px;
+      --header-height:  58px;
+    }
+
+    /* ─── Reset / Base ──────────────────────────────────────────── */
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      font-family: 'Poppins', sans-serif;
+      background: var(--bg-page);
+      color: var(--text-dark);
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    /* ─── Login Screen ──────────────────────────────────────────── */
+    #login-screen {
+      position: fixed; inset: 0;
+      display: flex; flex-direction: row;
+      z-index: 1000;
+      transition: opacity 0.5s ease, transform 0.5s ease;
+    }
+    #login-screen.fade-out {
+      opacity: 0;
+      transform: translateY(-16px);
+      pointer-events: none;
+    }
+
+    /* Left hero panel */
+    .login-hero {
+      flex: 1;
+      background: #071B3A;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      align-items: flex-start;
+    }
+    .login-hero-gradient {
+      position: absolute; inset: 0;
+      background: linear-gradient(156.69deg, rgba(255,255,255,0.55) 2%, rgba(255,255,255,0) 66%);
+      pointer-events: none;
+    }
+    /* Decorative geometric shapes in background */
+    .login-hero-art {
+      position: absolute; inset: 0;
+      opacity: 0.07;
+    }
+    .login-hero-logo {
+      position: absolute;
+      left: 63px; top: 68px;
+      display: flex; align-items: center; gap: 0;
+    }
+    .login-hero-tagline {
+      position: absolute;
+      left: 63px; bottom: 72px;
+      color: rgba(255,255,255,0.55);
+      font-size: .78rem; font-weight: 400;
+      letter-spacing: .04em;
+      line-height: 1.6;
+    }
+
+    /* Right form panel */
+    .login-form-panel {
+      width: 50%;
+      min-width: 480px;
+      background: #F2F4F5;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 48px 32px;
+    }
+
+    /* Error banner */
+    .login-error-banner {
+      width: 532px; max-width: 100%;
+      padding: 10px 14px;
+      border: 2px solid #D42802;
+      border-radius: 8px;
+      background: #fff0ed;
+      color: #D42802;
+      font-size: .82rem; font-weight: 500;
+      display: none;
+      align-items: center; gap: 8px;
+      margin-bottom: 12px;
+    }
+    .login-error-banner.show { display: flex; }
+
+    /* Form card */
+    .login-card {
+      width: 532px; max-width: 100%;
+      background: #F9F9F9;
+      border: 1px solid rgba(205, 204, 216, 0.16);
+      border-radius: 8px;
+      padding: 32px 24px 24px;
+      display: flex; flex-direction: column;
+      gap: 10px;
+    }
+
+    /* Card content sections */
+    .login-welcome {
+      font-size: 18px; font-weight: 600; line-height: 26px;
+      letter-spacing: 0.4px; color: #495057;
+      margin-bottom: 0;
+    }
+    .login-title {
+      font-size: 32px; font-weight: 600; line-height: 38px;
+      color: #16335F;
+      margin-bottom: 4px;
+    }
+    .login-subtitle {
+      font-size: 16px; font-weight: 400; line-height: 24px;
+      color: #343A40;
+      margin-bottom: 8px;
+    }
+
+    /* Fields */
+    .login-field {
+      display: flex; flex-direction: column;
+      gap: 0;
+      width: 100%;
+    }
+    .login-field-label {
+      font-size: 14px; font-weight: 500; line-height: 21px;
+      color: #16335F;
+      padding: 0 0 4px 4px;
+    }
+    .login-field-input {
+      width: 100%; height: 48px;
+      background: rgba(205, 204, 216, 0.08);
+      border: 1px solid rgba(205, 204, 216, 0.4);
+      border-radius: 4px;
+      padding: 8px 12px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 16px; font-weight: 300; color: #495057;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+    .login-field-input::placeholder { color: #495057; opacity: .7; }
+    .login-field-input:focus {
+      border-color: #16335F;
+      background: rgba(22, 51, 95, 0.04);
+    }
+
+    /* Primary login button */
+    .login-submit-btn {
+      width: 100%; height: 48px;
+      background: #16335F; color: #F9F9F9;
+      border: none; border-radius: 4px;
+      font-family: 'Poppins', sans-serif;
+      font-size: 20px; font-weight: 400; line-height: 32px;
+      cursor: pointer;
+      transition: background 0.2s, transform 0.1s;
+      margin-top: 8px;
+    }
+    .login-submit-btn:hover { background: #1e4a88; }
+    .login-submit-btn:active { transform: scale(.99); }
+
+    /* OR divider */
+    .login-or {
+      display: flex; align-items: center;
+      width: 100%; gap: 0;
+      margin: 6px 0 2px;
+    }
+    .login-or-line {
+      flex: 1; height: 0;
+      border-top: 1px solid rgba(205, 204, 216, 0.4);
+    }
+    .login-or-label {
+      padding: 4px 12px;
+      font-size: 16px; font-weight: 500; line-height: 24px;
+      color: #495057;
+      background: #F9F9F9;
+    }
+
+    /* Badge sign-in link */
+    .badge-link-row {
+      display: flex; justify-content: center;
+      width: 100%;
+    }
+    .badge-link {
+      display: inline-flex; align-items: center; gap: 8px;
+      padding: 4px 0;
+      font-size: 16px; font-weight: 500; line-height: 24px;
+      color: #16335F;
+      border-bottom: 2px solid #16335F;
+      cursor: pointer;
+      background: none; border-left: none; border-right: none; border-top: none;
+      font-family: 'Poppins', sans-serif;
+      transition: opacity 0.2s;
+      text-decoration: none;
+    }
+    .badge-link:hover { opacity: 0.75; }
+    .badge-link.scanning {
+      color: #607d8b; border-bottom-color: #607d8b;
+      cursor: default; pointer-events: none;
+    }
+    .badge-link.success {
+      color: #1a6e3c; border-bottom-color: #1a6e3c;
+      pointer-events: none;
+    }
+    .badge-link-spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(22,51,95,0.25);
+      border-top-color: #16335F;
+      border-radius: 50%;
+      animation: spin 0.7s linear infinite;
+      display: none;
+    }
+    .badge-link.scanning .badge-link-spinner { display: block; }
+    .badge-link.scanning .badge-link-icon { display: none; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ─── Main App Shell ────────────────────────────────────────── */
+    #app {
+      display: flex; flex-direction: column;
+      height: 100vh;
+      opacity: 0; transition: opacity 0.5s ease 0.2s;
+    }
+    #app.visible { opacity: 1; }
+
+    /* Header */
+    .app-header {
+      height: var(--header-height);
+      background: var(--primary);
+      display: flex; align-items: center;
+      padding: 0 20px;
+      gap: 16px;
+      box-shadow: 0 2px 8px rgba(0,0,0,0.2);
+      flex-shrink: 0;
+      position: relative; z-index: 10;
+    }
+    .header-logo img {
+      height: 28px; width: auto;
+    }
+    .header-spacer { flex: 1; }
+    .header-search {
+      background: rgba(255,255,255,0.12);
+      border: 1px solid rgba(255,255,255,0.2);
+      border-radius: 20px;
+      padding: 6px 16px;
+      color: white; font-family: 'Poppins', sans-serif; font-size: .82rem;
+      width: 200px; outline: none;
+    }
+    .header-search::placeholder { color: rgba(255,255,255,0.55); }
+    .header-avatar {
+      width: 34px; height: 34px; border-radius: 50%;
+      background: var(--secondary);
+      display: flex; align-items: center; justify-content: center;
+      color: var(--primary); font-weight: 700; font-size: .8rem;
+      cursor: pointer;
+      flex-shrink: 0;
+    }
+    .header-user {
+      color: rgba(255,255,255,0.9); font-size: .82rem; font-weight: 500;
+    }
+    .signout-btn {
+      display: flex; align-items: center; gap: 6px;
+      padding: 5px 12px; border-radius: 4px;
+      border: 1px solid rgba(255,255,255,0.25);
+      background: transparent; color: rgba(255,255,255,0.8);
+      font-family: 'Poppins', sans-serif; font-size: .78rem; font-weight: 500;
+      cursor: pointer;
+      transition: background 0.2s, border-color 0.2s;
+      flex-shrink: 0;
+    }
+    .signout-btn:hover {
+      background: rgba(255,255,255,0.12);
+      border-color: rgba(255,255,255,0.45);
+      color: white;
+    }
+    .signout-btn svg { width: 13px; height: 13px; }
+    .badge-indicator {
+      display: flex; align-items: center; gap: 6px;
+      background: rgba(29, 212, 215, 0.15);
+      border: 1px solid rgba(29, 212, 215, 0.4);
+      border-radius: 20px;
+      padding: 4px 12px;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    .badge-indicator:hover { background: rgba(29, 212, 215, 0.25); }
+    .badge-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+      background: var(--secondary);
+      animation: pulse 2s ease-in-out infinite;
+    }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.6; transform: scale(0.85); }
+    }
+    .badge-label {
+      color: var(--secondary); font-size: .72rem; font-weight: 600;
+    }
+
+    /* App Body */
+    .app-body {
+      display: flex; flex: 1; overflow: hidden; position: relative;
+    }
+
+    /* Side Nav */
+    .side-nav {
+      width: 220px; background: var(--bg-nav);
+      border-right: 1px solid #dce3ec;
+      display: flex; flex-direction: column;
+      padding: 16px 0;
+      flex-shrink: 0;
+    }
+    .nav-section-label {
+      font-size: .68rem; font-weight: 600; color: var(--text-medium);
+      text-transform: uppercase; letter-spacing: .08em;
+      padding: 12px 18px 4px;
+    }
+    .nav-item {
+      display: flex; align-items: center; gap: 10px;
+      padding: 10px 18px;
+      font-size: .83rem; color: var(--primary); font-weight: 500;
+      cursor: pointer; border-radius: 0;
+      transition: background 0.15s;
+      text-decoration: none;
+    }
+    .nav-item:hover { background: var(--hover-bg); }
+    .nav-item.active {
+      background: var(--active-bg);
+      font-weight: 600;
+      border-right: 3px solid var(--primary);
+    }
+    .nav-item svg { width: 17px; height: 17px; flex-shrink: 0; opacity: 0.7; }
+    .nav-item.active svg { opacity: 1; }
+
+    /* Main Content */
+    .main-content {
+      flex: 1; overflow-y: auto; padding: 24px;
+      transition: margin-right 0.35s cubic-bezier(.4,0,.2,1);
+    }
+    .main-content.panel-open {
+      margin-right: var(--panel-width);
+    }
+    .content-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 20px;
+    }
+    .content-header h1 {
+      font-size: 1.25rem; font-weight: 700; color: var(--primary);
+    }
+    .btn-primary {
+      padding: 9px 20px; border: none; border-radius: var(--radius-sm);
+      background: var(--primary); color: white;
+      font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 7px;
+      transition: background 0.2s;
+    }
+    .btn-primary:hover { background: #1e4a88; }
+    .btn-secondary {
+      padding: 9px 20px; border: none; border-radius: var(--radius-sm);
+      background: var(--secondary); color: var(--primary);
+      font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; gap: 7px;
+      transition: background 0.2s;
+    }
+    .btn-secondary:hover { background: #17b8bb; }
+
+    /* Dashboard Cards */
+    .stat-row {
+      display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px;
+      margin-bottom: 24px;
+    }
+    .stat-card {
+      background: white; border-radius: var(--radius-md);
+      padding: 18px; box-shadow: var(--shadow-sm);
+      border-left: 4px solid var(--primary);
+    }
+    .stat-card.cyan { border-left-color: var(--secondary); }
+    .stat-card.green { border-left-color: var(--success); }
+    .stat-card.yellow { border-left-color: var(--warning); }
+    .stat-label { font-size: .72rem; color: var(--text-medium); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+    .stat-value { font-size: 1.75rem; font-weight: 700; color: var(--primary); margin-top: 4px; }
+    .stat-sub { font-size: .72rem; color: var(--text-medium); margin-top: 2px; }
+
+    .section-card {
+      background: white; border-radius: var(--radius-md);
+      padding: 20px; box-shadow: var(--shadow-sm); margin-bottom: 16px;
+    }
+    .section-card h2 {
+      font-size: .9rem; font-weight: 600; color: var(--primary);
+      margin-bottom: 14px;
+      display: flex; align-items: center; gap: 8px;
+    }
+    .table-row {
+      display: grid; grid-template-columns: 1fr 1fr 1fr 1fr auto;
+      gap: 12px; align-items: center;
+      padding: 10px 0; border-bottom: 1px solid #f0f0f0;
+      font-size: .82rem;
+    }
+    .table-row.header { font-weight: 600; color: var(--text-medium); font-size: .75rem; text-transform: uppercase; letter-spacing: .05em; padding-bottom: 8px; }
+    .status-badge {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 3px 10px; border-radius: 20px; font-size: .72rem; font-weight: 600;
+    }
+    .status-badge.active { background: #d9ebdd; color: #00761c; }
+    .status-badge.pending { background: #fcf3da; color: #b07d00; }
+    .status-badge.done { background: #d2e5fc; color: #1a5fbf; }
+
+    /* ─── Patient Side Panel ────────────────────────────────────── */
+    .patient-panel {
+      position: fixed; top: var(--header-height); right: 0; bottom: 0;
+      width: var(--panel-width);
+      background: white;
+      border-left: 1px solid #dce3ec;
+      box-shadow: -4px 0 20px rgba(0,0,0,0.12);
+      display: flex; flex-direction: column;
+      transform: translateX(100%);
+      transition: transform 0.35s cubic-bezier(.4,0,.2,1);
+      z-index: 50;
+    }
+    .patient-panel.open { transform: translateX(0); }
+
+    .panel-header {
+      padding: 16px 18px;
+      background: var(--primary);
+      display: flex; align-items: center; gap: 10px;
+      flex-shrink: 0;
+    }
+    .panel-title-block { flex: 1; }
+    .panel-title {
+      color: white; font-size: .95rem; font-weight: 700;
+    }
+    .panel-subtitle {
+      color: rgba(255,255,255,0.65); font-size: .72rem; margin-top: 2px;
+    }
+    .panel-close {
+      width: 28px; height: 28px; border-radius: 50%;
+      border: none; background: rgba(255,255,255,0.15);
+      color: white; cursor: pointer; font-size: 1rem;
+      display: flex; align-items: center; justify-content: center;
+      transition: background 0.2s;
+    }
+    .panel-close:hover { background: rgba(255,255,255,0.28); }
+
+    .panel-search {
+      padding: 12px 14px;
+      border-bottom: 1px solid #f0f0f0;
+      flex-shrink: 0;
+    }
+    .panel-search input {
+      width: 100%; padding: 8px 12px;
+      background: var(--bg-search); border: 1px solid #d8e6f5;
+      border-radius: 20px; font-family: 'Poppins', sans-serif;
+      font-size: .8rem; color: var(--text-dark); outline: none;
+    }
+    .panel-search input:focus { border-color: var(--secondary); }
+
+    .panel-body {
+      flex: 1; overflow-y: auto; padding: 12px;
+    }
+    .panel-body::-webkit-scrollbar { width: 5px; }
+    .panel-body::-webkit-scrollbar-track { background: transparent; }
+    .panel-body::-webkit-scrollbar-thumb { background: #ccc; border-radius: 3px; }
+
+    .panel-section-label {
+      font-size: .68rem; font-weight: 600; color: var(--text-medium);
+      text-transform: uppercase; letter-spacing: .08em;
+      padding: 6px 4px 8px;
+    }
+
+    /* Patient Card */
+    .patient-card {
+      background: #fafbfc;
+      border: 1px solid #e8edf3;
+      border-radius: var(--radius-md);
+      padding: 14px;
+      margin-bottom: 10px;
+      transition: box-shadow 0.2s, border-color 0.2s;
+    }
+    .patient-card:hover {
+      box-shadow: var(--shadow-sm);
+      border-color: #c5d4e8;
+    }
+    .patient-card-top {
+      display: flex; align-items: flex-start; gap: 10px;
+      margin-bottom: 10px;
+    }
+    .patient-avatar {
+      width: 38px; height: 38px; border-radius: 50%;
+      background: var(--primary); color: white;
+      display: flex; align-items: center; justify-content: center;
+      font-size: .8rem; font-weight: 700; flex-shrink: 0;
+    }
+    .patient-info { flex: 1; min-width: 0; }
+    .patient-name {
+      font-size: .88rem; font-weight: 600; color: var(--primary);
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .patient-room {
+      font-size: .72rem; color: var(--text-medium); margin-top: 1px;
+    }
+    .lang-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #e3f9fa; border: 1px solid #a8e8ea;
+      border-radius: 20px; padding: 3px 9px;
+      font-size: .72rem; font-weight: 600; color: #0a7a7c;
+      flex-shrink: 0; margin-top: 2px;
+    }
+    .lang-flag { font-size: .9rem; }
+    .patient-actions {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 7px;
+    }
+    .patient-btn {
+      padding: 7px 6px; border: none; border-radius: var(--radius-sm);
+      font-family: 'Poppins', sans-serif; font-size: .72rem; font-weight: 600;
+      cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 5px;
+      transition: all 0.2s; white-space: nowrap;
+    }
+    .patient-btn.call {
+      background: var(--primary); color: white;
+    }
+    .patient-btn.call:hover { background: #1e4a88; }
+    .patient-btn.call:active { transform: scale(.97); }
+    .patient-btn.doc {
+      background: var(--secondary); color: var(--primary);
+    }
+    .patient-btn.doc:hover { background: #17b8bb; }
+    .patient-btn.doc:active { transform: scale(.97); }
+    .patient-btn svg { width: 13px; height: 13px; }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed; bottom: 24px; left: 50%; transform: translateX(-50%) translateY(80px);
+      background: var(--primary); color: white;
+      border-radius: var(--radius-md); padding: 12px 20px;
+      font-size: .83rem; font-weight: 500;
+      box-shadow: var(--shadow-lg);
+      display: flex; align-items: center; gap: 10px;
+      z-index: 200;
+      transition: transform 0.3s cubic-bezier(.4,0,.2,1), opacity 0.3s;
+      opacity: 0;
+      white-space: nowrap;
+    }
+    .toast.show { transform: translateX(-50%) translateY(0); opacity: 1; }
+    .toast.success { background: #1a6e3c; }
+    .toast.cyan { background: #0a7a7c; }
+    .toast svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+    /* SSO Banner */
+    .sso-banner {
+      background: #e3f9fa; border-bottom: 1px solid #a8e8ea;
+      padding: 8px 20px;
+      display: flex; align-items: center; gap: 10px;
+      font-size: .78rem; color: #0a7a7c; font-weight: 500;
+      flex-shrink: 0;
+    }
+    .sso-banner svg { width: 15px; height: 15px; flex-shrink: 0; }
+    .sso-banner strong { color: var(--primary); }
+
+    /* Modal Overlay */
+    .modal-overlay {
+      position: fixed; inset: 0; background: rgba(0,0,0,0.4);
+      z-index: 100; display: flex; align-items: center; justify-content: center;
+      opacity: 0; pointer-events: none; transition: opacity 0.25s;
+    }
+    .modal-overlay.open { opacity: 1; pointer-events: all; }
+    .modal {
+      background: white; border-radius: var(--radius-lg);
+      padding: 28px 32px; width: 440px; max-width: 92vw;
+      box-shadow: var(--shadow-lg);
+      transform: scale(.95); transition: transform 0.25s;
+    }
+    .modal-overlay.open .modal { transform: scale(1); }
+    .modal h3 { font-size: 1rem; font-weight: 700; color: var(--primary); margin-bottom: 6px; }
+    .modal p { font-size: .83rem; color: var(--text-medium); margin-bottom: 20px; line-height: 1.6; }
+    .modal-row {
+      display: flex; gap: 8px; align-items: center; margin-bottom: 12px;
+    }
+    .modal-label { font-size: .78rem; font-weight: 600; color: var(--text-dark); width: 100px; flex-shrink: 0; }
+    .modal-value {
+      font-size: .83rem; color: var(--primary); font-weight: 500;
+      background: var(--bg-nav); padding: 5px 10px; border-radius: var(--radius-sm); flex: 1;
+    }
+    .modal-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 20px; }
+    .btn-outline {
+      padding: 9px 20px; border: 1.5px solid var(--border); border-radius: var(--radius-sm);
+      background: transparent; color: var(--text-dark);
+      font-family: 'Poppins', sans-serif; font-size: .82rem; font-weight: 600;
+      cursor: pointer; transition: border-color 0.2s;
+    }
+    .btn-outline:hover { border-color: var(--primary); color: var(--primary); }
+  </style>
+</head>
+<body>
+
+<!-- ── Login Screen ────────────────────────────────────────────── -->
+<div id="login-screen">
+
+  <!-- Left: Hero Panel -->
+  <div class="login-hero">
+    <!-- Decorative SVG background art -->
+    <svg class="login-hero-art" viewBox="0 0 720 1024" preserveAspectRatio="xMidYMid slice" xmlns="http://www.w3.org/2000/svg">
+      <circle cx="360" cy="512" r="380" fill="white"/>
+      <circle cx="100" cy="200" r="160" fill="white"/>
+      <circle cx="620" cy="880" r="220" fill="white"/>
+      <rect x="500" y="100" width="300" height="300" rx="60" fill="white" transform="rotate(25 650 250)"/>
+    </svg>
+    <!-- Gradient overlay -->
+    <div class="login-hero-gradient"></div>
+    <!-- Logo -->
+    <div class="login-hero-logo">
+      <img src="../../Pictures/propio-one-negative.png" alt="Propio ONE" style="height:52px; width:auto;" />
+    </div>
+    <!-- Bottom tagline -->
+    <div class="login-hero-tagline">
+      Language access for every patient.<br>
+      Powered by Propio Language Services.
+    </div>
+  </div>
+
+  <!-- Right: Form Panel -->
+  <div class="login-form-panel">
+
+    <!-- Error banner (hidden by default) -->
+    <div class="login-error-banner" id="login-error">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
+      Incorrect email or password. Please try again.
+    </div>
+
+    <!-- Card -->
+    <div class="login-card">
+      <div class="login-welcome">WELCOME BACK</div>
+      <div>
+        <div class="login-title">Login</div>
+        <div class="login-subtitle">Enter your credentials to access Propio ONE.</div>
+      </div>
+
+      <!-- Email field -->
+      <div class="login-field">
+        <label class="login-field-label" for="login-email">Email Address</label>
+        <input class="login-field-input" id="login-email" type="email" placeholder="you@organization.com" autocomplete="email" />
+      </div>
+
+      <!-- Password field -->
+      <div class="login-field">
+        <label class="login-field-label" for="login-password">Password</label>
+        <input class="login-field-input" id="login-password" type="password" placeholder="••••••••••" autocomplete="current-password" />
+      </div>
+
+      <!-- Login button -->
+      <button class="login-submit-btn" onclick="handleManualLogin()">Log in</button>
+
+      <!-- OR + Badge link -->
+      <div class="login-or">
+        <div class="login-or-line"></div>
+        <span class="login-or-label">OR</span>
+        <div class="login-or-line"></div>
+      </div>
+      <div class="badge-link-row">
+        <button class="badge-link" id="badge-link-btn" onclick="simulateBadgeScan()">
+          <span class="badge-link-icon">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+              <rect x="2" y="5" width="20" height="14" rx="2"/>
+              <circle cx="8" cy="11" r="2"/>
+              <path d="M4 19c0-2 1.8-3 4-3s4 1 4 3"/>
+              <line x1="15" y1="9" x2="19" y2="9"/>
+              <line x1="15" y1="13" x2="17" y2="13"/>
+            </svg>
+          </span>
+          <div class="badge-link-spinner"></div>
+          <span class="badge-link-text">Sign in with Imprivata Badge</span>
+        </button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- ── Main App ─────────────────────────────────────────────────── -->
+<div id="app">
+  <!-- Header -->
+  <header class="app-header">
+    <div class="header-logo">
+      <img src="../../Pictures/propio-one-negative.png" alt="Propio ONE" />
+    </div>
+    <input class="header-search" type="text" placeholder="Search..." />
+    <div class="header-spacer"></div>
+    <div class="badge-indicator" onclick="togglePanel()" title="Imprivata — My Patients">
+      <div class="badge-dot"></div>
+      <span class="badge-label">My Patients</span>
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="#1dd4d7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M17 7l-10 10M7 7h10v10"/></svg>
+    </div>
+    <div class="header-user">Dr. Sarah Chen</div>
+    <div class="header-avatar">SC</div>
+    <button class="signout-btn" onclick="signOut()">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M9 21H5a2 2 0 01-2-2V5a2 2 0 012-2h4"/>
+        <polyline points="16 17 21 12 16 7"/>
+        <line x1="21" y1="12" x2="9" y2="12"/>
+      </svg>
+      Sign out
+    </button>
+  </header>
+
+  <!-- SSO Banner -->
+  <div class="sso-banner">
+    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+    Signed in via <strong>&nbsp;Imprivata SSO&nbsp;</strong> — Badge authenticated &nbsp;·&nbsp; Session active
+    <span style="flex:1"></span>
+    <span style="font-size:.72rem; opacity:.7">Badge ID: 4F2A-9C31</span>
+  </div>
+
+  <div class="app-body">
+    <!-- Side Nav -->
+    <nav class="side-nav">
+      <div class="nav-section-label">Main</div>
+      <a class="nav-item active" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+        Dashboard
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+        Interpreter Calls
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/><polyline points="10 9 9 9 8 9"/></svg>
+        Document Translation
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg>
+        Patients
+      </a>
+      <div class="nav-section-label" style="margin-top:12px">Reporting</div>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+        Analytics
+      </a>
+      <a class="nav-item" href="#">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.07 4.93a10 10 0 010 14.14M4.93 4.93a10 10 0 000 14.14"/></svg>
+        Settings
+      </a>
+    </nav>
+
+    <!-- Main Content -->
+    <main class="main-content" id="main-content">
+      <div class="content-header">
+        <h1>Dashboard</h1>
+        <div style="display:flex;gap:10px">
+          <button class="btn-secondary" onclick="openCallModal()">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+            New Call
+          </button>
+          <button class="btn-primary">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+            New Request
+          </button>
+        </div>
+      </div>
+
+      <!-- Stats -->
+      <div class="stat-row">
+        <div class="stat-card">
+          <div class="stat-label">Calls Today</div>
+          <div class="stat-value">12</div>
+          <div class="stat-sub">+3 from yesterday</div>
+        </div>
+        <div class="stat-card cyan">
+          <div class="stat-label">Active Patients</div>
+          <div class="stat-value">5</div>
+          <div class="stat-sub">LEP patients assigned</div>
+        </div>
+        <div class="stat-card green">
+          <div class="stat-label">Translations</div>
+          <div class="stat-value">4</div>
+          <div class="stat-sub">2 pending review</div>
+        </div>
+        <div class="stat-card yellow">
+          <div class="stat-label">Avg. Wait</div>
+          <div class="stat-value">1:42</div>
+          <div class="stat-sub">min this week</div>
+        </div>
+      </div>
+
+      <!-- Recent Activity -->
+      <div class="section-card">
+        <h2>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>
+          Recent Activity
+        </h2>
+        <div class="table-row header">
+          <span>Patient</span><span>Language</span><span>Type</span><span>Time</span><span>Status</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">M. Rodriguez</span>
+          <span>Spanish</span>
+          <span>Video Call</span>
+          <span style="color:var(--text-medium)">9:14 AM</span>
+          <span class="status-badge done">Complete</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">H. Nguyen</span>
+          <span>Vietnamese</span>
+          <span>Document</span>
+          <span style="color:var(--text-medium)">8:50 AM</span>
+          <span class="status-badge pending">Pending</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">F. Al-Rashid</span>
+          <span>Arabic</span>
+          <span>Video Call</span>
+          <span style="color:var(--text-medium)">8:22 AM</span>
+          <span class="status-badge done">Complete</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">Y. Chen</span>
+          <span>Mandarin</span>
+          <span>Document</span>
+          <span style="color:var(--text-medium)">Yesterday</span>
+          <span class="status-badge active">In Review</span>
+        </div>
+      </div>
+
+      <div class="section-card">
+        <h2>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+          Upcoming Calls
+        </h2>
+        <div class="table-row header">
+          <span>Patient</span><span>Language</span><span>Provider</span><span>Scheduled</span><span>Status</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">M. Rodriguez</span>
+          <span>Spanish</span>
+          <span>Dr. S. Chen</span>
+          <span style="color:var(--text-medium)">11:00 AM</span>
+          <span class="status-badge pending">Scheduled</span>
+        </div>
+        <div class="table-row">
+          <span style="font-weight:500">L. Kim</span>
+          <span>Korean</span>
+          <span>Dr. S. Chen</span>
+          <span style="color:var(--text-medium)">2:30 PM</span>
+          <span class="status-badge pending">Scheduled</span>
+        </div>
+      </div>
+    </main>
+
+    <!-- ── Patient Panel ──────────────────────────────────────── -->
+    <aside class="patient-panel" id="patient-panel">
+      <div class="panel-header">
+        <div style="width:32px;height:32px;border-radius:50%;background:rgba(29,212,215,0.2);display:flex;align-items:center;justify-content:center;flex-shrink:0">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#1dd4d7" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        </div>
+        <div class="panel-title-block">
+          <div class="panel-title">My LEP Patients</div>
+          <div class="panel-subtitle">Badge session · Dr. Sarah Chen</div>
+        </div>
+        <button class="panel-close" onclick="togglePanel()">✕</button>
+      </div>
+      <div class="panel-search">
+        <input type="text" placeholder="Search patients..." id="patient-search" oninput="filterPatients()" />
+      </div>
+      <div class="panel-body" id="panel-body">
+        <div class="panel-section-label">Current Patients — Floor 3B</div>
+        <!-- Patient cards injected by JS -->
+      </div>
+    </aside>
+  </div>
+</div>
+
+<!-- ── Call Modal ──────────────────────────────────────────────── -->
+<div class="modal-overlay" id="call-modal">
+  <div class="modal">
+    <h3 id="modal-title">Start Interpreter Call</h3>
+    <p id="modal-desc">Connect with a qualified interpreter for this patient.</p>
+    <div class="modal-row">
+      <span class="modal-label">Patient</span>
+      <span class="modal-value" id="modal-patient">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">Language</span>
+      <span class="modal-value" id="modal-language">—</span>
+    </div>
+    <div class="modal-row">
+      <span class="modal-label">Provider</span>
+      <span class="modal-value">Dr. Sarah Chen</span>
+    </div>
+    <div class="modal-row" id="modal-doc-row" style="display:none">
+      <span class="modal-label">Document</span>
+      <span class="modal-value" id="modal-doc-type">—</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-outline" onclick="closeModal()">Cancel</button>
+      <button class="btn-primary" id="modal-confirm-btn" onclick="confirmAction()">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+        Start Call
+      </button>
+    </div>
+  </div>
+</div>
+
+<!-- ── Toast ───────────────────────────────────────────────────── -->
+<div class="toast" id="toast">
+  <svg id="toast-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+  <span id="toast-msg"></span>
+</div>
+
+<script>
+  // ── Patient Data ───────────────────────────────────────────────
+  const patients = [
+    { id: 1, name: "Maria Rodriguez",    initials: "MR", room: "Room 312", lang: "Spanish",    flag: "🇲🇽", color: "#16335f" },
+    { id: 2, name: "Hieu Nguyen",        initials: "HN", room: "Room 308", lang: "Vietnamese",  flag: "🇻🇳", color: "#0a5c6e" },
+    { id: 3, name: "Fatima Al-Rashid",   initials: "FA", room: "Room 315", lang: "Arabic",      flag: "🇸🇦", color: "#5c3a0a" },
+    { id: 4, name: "Yuki Tanaka",        initials: "YT", room: "Room 301", lang: "Japanese",    flag: "🇯🇵", color: "#3a0a5c" },
+    { id: 5, name: "Lin Wei",            initials: "LW", room: "Room 320", lang: "Mandarin",    flag: "🇨🇳", color: "#0a5c1e" },
+  ];
+
+  let panelOpen = false;
+  let currentModal = null;
+
+  // ── Render Patient Cards ───────────────────────────────────────
+  function renderPatients(list) {
+    const body = document.getElementById("panel-body");
+    const label = '<div class="panel-section-label">Current Patients — Floor 3B</div>';
+    if (list.length === 0) {
+      body.innerHTML = label + '<div style="text-align:center;padding:32px 12px;color:var(--text-medium);font-size:.82rem;">No patients found.</div>';
+      return;
+    }
+    body.innerHTML = label + list.map(p => `
+      <div class="patient-card">
+        <div class="patient-card-top">
+          <div class="patient-avatar" style="background:${p.color}">${p.initials}</div>
+          <div class="patient-info">
+            <div class="patient-name">${p.name}</div>
+            <div class="patient-room">${p.room}</div>
+          </div>
+          <div class="lang-badge">
+            <span class="lang-flag">${p.flag}</span>
+            ${p.lang}
+          </div>
+        </div>
+        <div class="patient-actions">
+          <button class="patient-btn call" onclick="startCall(${p.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+            Start Call
+          </button>
+          <button class="patient-btn doc" onclick="requestDoc(${p.id})">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>
+            Translate Doc
+          </button>
+        </div>
+      </div>
+    `).join("");
+  }
+
+  function filterPatients() {
+    const q = document.getElementById("patient-search").value.toLowerCase();
+    renderPatients(patients.filter(p =>
+      p.name.toLowerCase().includes(q) || p.lang.toLowerCase().includes(q)
+    ));
+  }
+
+  // ── Panel Toggle ───────────────────────────────────────────────
+  function togglePanel() {
+    panelOpen = !panelOpen;
+    document.getElementById("patient-panel").classList.toggle("open", panelOpen);
+    document.getElementById("main-content").classList.toggle("panel-open", panelOpen);
+  }
+
+  // ── Manual Login ───────────────────────────────────────────────
+  function handleManualLogin() {
+    const email = document.getElementById("login-email").value.trim();
+    const pass  = document.getElementById("login-password").value;
+    const banner = document.getElementById("login-error");
+    if (!email || !pass) {
+      banner.classList.add("show");
+      banner.querySelector("span:last-child") && null;
+      document.querySelector(".login-error-banner").textContent = "";
+      banner.innerHTML = `<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg> Please enter your email and password.`;
+      return;
+    }
+    banner.classList.remove("show");
+    // For POC — simulate a successful login for any input
+    launchApp();
+  }
+
+  // ── Badge Scan Simulation ──────────────────────────────────────
+  function simulateBadgeScan() {
+    const btn = document.getElementById("badge-link-btn");
+    if (btn.classList.contains("scanning") || btn.classList.contains("success")) return;
+
+    document.getElementById("login-error").classList.remove("show");
+    btn.classList.add("scanning");
+    btn.querySelector(".badge-link-text").textContent = "Reading badge…";
+
+    setTimeout(() => {
+      btn.classList.remove("scanning");
+      btn.classList.add("success");
+      btn.querySelector(".badge-link-text").textContent = "Authenticated!";
+      btn.querySelector(".badge-link-icon").innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="20 6 9 17 4 12"/>
+        </svg>`;
+      setTimeout(launchApp, 600);
+    }, 1800);
+  }
+
+  // ── Sign Out ───────────────────────────────────────────────────
+  function signOut() {
+    // Close panel if open
+    if (panelOpen) togglePanel();
+
+    const app = document.getElementById("app");
+    const loginScreen = document.getElementById("login-screen");
+    const badgeBtn = document.getElementById("badge-link-btn");
+
+    // Fade app out
+    app.classList.remove("visible");
+
+    setTimeout(() => {
+      // Reset login form
+      document.getElementById("login-email").value = "";
+      document.getElementById("login-password").value = "";
+      document.getElementById("login-error").classList.remove("show");
+
+      // Reset badge link state
+      badgeBtn.classList.remove("scanning", "success");
+      badgeBtn.querySelector(".badge-link-text").textContent = "Sign in with Imprivata Badge";
+      badgeBtn.querySelector(".badge-link-icon").innerHTML = `
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="2" y="5" width="20" height="14" rx="2"/>
+          <circle cx="8" cy="11" r="2"/>
+          <path d="M4 19c0-2 1.8-3 4-3s4 1 4 3"/>
+          <line x1="15" y1="9" x2="19" y2="9"/>
+          <line x1="15" y1="13" x2="17" y2="13"/>
+        </svg>`;
+
+      // Show login screen
+      loginScreen.style.display = "";
+      loginScreen.classList.remove("fade-out");
+    }, 400);
+  }
+
+  function launchApp() {
+    document.getElementById("login-screen").classList.add("fade-out");
+    const app = document.getElementById("app");
+    app.classList.add("visible");
+    setTimeout(() => {
+      document.getElementById("login-screen").style.display = "none";
+      setTimeout(() => {
+        renderPatients(patients);
+        togglePanel();
+        showToast("Badge verified — 5 LEP patients loaded", "success");
+      }, 600);
+    }, 500);
+  }
+
+  // ── Modal Actions ──────────────────────────────────────────────
+  function startCall(id) {
+    const p = patients.find(x => x.id === id);
+    document.getElementById("modal-title").textContent = "Start Interpreter Call";
+    document.getElementById("modal-desc").textContent = "Connect with a qualified " + p.lang + " interpreter for this patient.";
+    document.getElementById("modal-patient").textContent = p.name + " · " + p.room;
+    document.getElementById("modal-language").textContent = p.flag + "  " + p.lang;
+    document.getElementById("modal-doc-row").style.display = "none";
+    document.getElementById("modal-confirm-btn").innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/></svg>
+      Start Call`;
+    document.getElementById("modal-confirm-btn").style.background = "var(--primary)";
+    currentModal = { type: "call", patient: p };
+    document.getElementById("call-modal").classList.add("open");
+  }
+
+  const docTypes = ["Discharge Instructions", "Consent Form", "Lab Results", "Medication Guide", "After-Visit Summary"];
+  function requestDoc(id) {
+    const p = patients.find(x => x.id === id);
+    const doc = docTypes[Math.floor(Math.random() * docTypes.length)];
+    document.getElementById("modal-title").textContent = "Request Document Translation";
+    document.getElementById("modal-desc").textContent = "Submit a translation request for this patient's document.";
+    document.getElementById("modal-patient").textContent = p.name + " · " + p.room;
+    document.getElementById("modal-language").textContent = p.flag + "  " + p.lang;
+    document.getElementById("modal-doc-row").style.display = "flex";
+    document.getElementById("modal-doc-type").textContent = doc;
+    document.getElementById("modal-confirm-btn").innerHTML = `
+      <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+      Submit Request`;
+    document.getElementById("modal-confirm-btn").style.background = "var(--primary)";
+    currentModal = { type: "doc", patient: p, doc };
+    document.getElementById("call-modal").classList.add("open");
+  }
+
+  function openCallModal() {
+    // Quick-start from header button — pick first patient
+    startCall(1);
+  }
+
+  function closeModal() {
+    document.getElementById("call-modal").classList.remove("open");
+    currentModal = null;
+  }
+
+  function confirmAction() {
+    closeModal();
+    if (!currentModal) return;
+    if (currentModal.type === "call") {
+      showToast("Connecting to " + currentModal.patient.lang + " interpreter…", "cyan");
+    } else {
+      showToast("Translation request submitted for " + currentModal.patient.name, "success");
+    }
+  }
+
+  // ── Toast ──────────────────────────────────────────────────────
+  let toastTimer = null;
+  function showToast(msg, type = "") {
+    const el = document.getElementById("toast");
+    const icon = document.getElementById("toast-icon");
+    el.className = "toast " + type;
+    document.getElementById("toast-msg").textContent = msg;
+    if (type === "cyan") {
+      icon.innerHTML = `<path d="M22 16.92v3a2 2 0 01-2.18 2 19.79 19.79 0 01-8.63-3.07A19.5 19.5 0 013.07 10.8 19.79 19.79 0 01.22 2.22 2 2 0 012.18 0h3a2 2 0 012 1.72c.127.96.361 1.903.7 2.81a2 2 0 01-.45 2.11L6.91 7.1A16 16 0 0016.9 17.09l.56-.56a2 2 0 012.11-.45 12.84 12.84 0 002.81.7A2 2 0 0122 16.92z"/>`;
+    } else {
+      icon.innerHTML = `<polyline points="20 6 9 17 4 12"/>`;
+    }
+    void el.offsetWidth;
+    el.classList.add("show");
+    if (toastTimer) clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove("show"), 3500);
+  }
+
+  // Click outside modal to close
+  document.getElementById("call-modal").addEventListener("click", function(e) {
+    if (e.target === this) closeModal();
+  });
+</script>
+</body>
+</html>
